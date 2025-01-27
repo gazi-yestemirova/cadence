@@ -191,8 +191,6 @@ func (r *stateRebuilderImpl) Rebuild(
 		return nil, 0, err
 	}
 
-	r.logger.Info("WorkflowDeletionJitterRange: ***", tag.WorkflowDomainName(rebuiltMutableState.GetDomainEntry().GetInfo().Name), tag.Value(r.shard.GetConfig().WorkflowDeletionJitterRange.AsFloat64(rebuiltMutableState.GetDomainEntry().GetInfo().Name)))
-
 	// mutable state rebuild should use the same time stamp
 	rebuiltMutableState.GetExecutionInfo().StartTimestamp = now
 	return rebuiltMutableState, r.rebuiltHistorySize, nil

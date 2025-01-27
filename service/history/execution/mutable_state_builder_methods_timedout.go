@@ -59,5 +59,7 @@ func (e *mutableStateBuilder) ReplicateWorkflowExecutionTimedoutEvent(
 	e.ClearStickyness()
 	e.writeEventToCache(event)
 
+	e.logger.Info("jitterrange", tag.WorkflowDomainName(e.domainEntry.GetInfo().Name), tag.Value(e.config.WorkflowDeletionJitterRange(e.domainEntry.GetInfo().Name)))
+
 	return e.taskGenerator.GenerateWorkflowCloseTasks(event, e.config.WorkflowDeletionJitterRange(e.domainEntry.GetInfo().Name))
 }

@@ -24,7 +24,6 @@ package execution
 
 import (
 	"context"
-
 	"github.com/uber/cadence/common"
 	"github.com/uber/cadence/common/log/tag"
 	"github.com/uber/cadence/common/persistence"
@@ -67,6 +66,8 @@ func (e *mutableStateBuilder) ReplicateWorkflowExecutionCompletedEvent(
 	e.ClearStickyness()
 	e.writeEventToCache(event)
 
+	e.logger.Info("jitterrange", tag.WorkflowDomainName(e.domainEntry.GetInfo().Name), tag.Value(e.config.WorkflowDeletionJitterRange(e.domainEntry.GetInfo().Name)))
+
 	return e.taskGenerator.GenerateWorkflowCloseTasks(event, e.config.WorkflowDeletionJitterRange(e.domainEntry.GetInfo().Name))
 }
 
@@ -101,6 +102,8 @@ func (e *mutableStateBuilder) ReplicateWorkflowExecutionFailedEvent(
 	e.executionInfo.CompletionEventBatchID = firstEventID // Used when completion event needs to be loaded from database
 	e.ClearStickyness()
 	e.writeEventToCache(event)
+
+	e.logger.Info("jitterrange", tag.WorkflowDomainName(e.domainEntry.GetInfo().Name), tag.Value(e.config.WorkflowDeletionJitterRange(e.domainEntry.GetInfo().Name)))
 
 	return e.taskGenerator.GenerateWorkflowCloseTasks(event, e.config.WorkflowDeletionJitterRange(e.domainEntry.GetInfo().Name))
 }
