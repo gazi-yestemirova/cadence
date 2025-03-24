@@ -100,6 +100,26 @@ func (s *noopDCRedirectionPolicySuite) TestWithDomainRedirect() {
 	s.Equal(2, callCount)
 }
 
+func (s *noopDCRedirectionPolicySuite) TestWithDomainRedirectForListWorkflows() {
+	domainName := "some random domain name"
+	domainID := "some random domain ID"
+	apiName := "ListWorkflowExecutions"
+	callCount := 0
+	callFn := func(targetCluster string) error {
+		callCount++
+		s.Equal(s.currentClusterName, targetCluster)
+		return nil
+	}
+
+	err := s.policy.WithDomainIDRedirect(context.Background(), domainID, apiName, callFn)
+	s.Nil(err)
+
+	err = s.policy.WithDomainNameRedirect(context.Background(), domainName, apiName, callFn)
+	s.Nil(err)
+
+	s.Equal(2, callCount)
+}
+
 func TestSelectedAPIsForwardingRedirectionPolicySuite(t *testing.T) {
 	s := new(selectedAPIsForwardingRedirectionPolicySuite)
 	suite.Run(t, s)

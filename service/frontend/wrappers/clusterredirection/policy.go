@@ -194,7 +194,8 @@ func (policy *selectedOrAllAPIsForwardingRedirectionPolicy) WithDomainIDRedirect
 	if err != nil {
 		return err
 	}
-	if domainEntry.IsDeprecatedOrDeleted() {
+	// Skip domain deprecation check for ListWorkflowExecutions API
+	if apiName != "ListWorkflowExecutions" && domainEntry.IsDeprecatedOrDeleted() {
 		return &types.DomainNotActiveError{
 			Message:        "domain is deprecated.",
 			DomainName:     domainEntry.GetInfo().Name,
@@ -211,7 +212,8 @@ func (policy *selectedOrAllAPIsForwardingRedirectionPolicy) WithDomainNameRedire
 	if err != nil {
 		return err
 	}
-	if domainEntry.IsDeprecatedOrDeleted() {
+	// Skip domain deprecation check for ListWorkflowExecutions API
+	if apiName != "ListWorkflowExecutions" && domainEntry.IsDeprecatedOrDeleted() {
 		return &types.DomainNotActiveError{
 			Message:        "domain is deprecated or deleted",
 			DomainName:     domainName,
