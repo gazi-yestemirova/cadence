@@ -100,10 +100,9 @@ func (s *noopDCRedirectionPolicySuite) TestWithDomainRedirect() {
 	s.Equal(2, callCount)
 }
 
-func (s *noopDCRedirectionPolicySuite) TestWithDomainRedirectForListWorkflows() {
+func (s *noopDCRedirectionPolicySuite) TestWithDomainRedirectForAllowedAPIs() {
 	domainName := "some random domain name"
 	domainID := "some random domain ID"
-	apiName := "ListWorkflowExecutions"
 	callCount := 0
 	callFn := func(targetCluster string) error {
 		callCount++
@@ -111,13 +110,24 @@ func (s *noopDCRedirectionPolicySuite) TestWithDomainRedirectForListWorkflows() 
 		return nil
 	}
 
-	err := s.policy.WithDomainIDRedirect(context.Background(), domainID, apiName, callFn)
-	s.Nil(err)
+	// Test all allowed APIs for deprecated domains
+	allowedAPIs := []string{
+		"ListWorkflowExecutions",
+		"CountWorkflowExecutions",
+		"ScanWorkflowExecutions",
+		"TerminateWorkflowExecution",
+	}
 
-	err = s.policy.WithDomainNameRedirect(context.Background(), domainName, apiName, callFn)
-	s.Nil(err)
+	for _, apiName := range allowedAPIs {
+		err := s.policy.WithDomainIDRedirect(context.Background(), domainID, apiName, callFn)
+		s.Nil(err)
 
-	s.Equal(2, callCount)
+		err = s.policy.WithDomainNameRedirect(context.Background(), domainName, apiName, callFn)
+		s.Nil(err)
+	}
+
+	// Verify that each API was tested for both domain ID and domain name redirects
+	s.Equal(2*len(allowedAPIs), callCount)
 }
 
 func TestSelectedAPIsForwardingRedirectionPolicySuite(t *testing.T) {
