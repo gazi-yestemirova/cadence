@@ -425,7 +425,12 @@ func (s *selectedAPIsForwardingRedirectionPolicySuite) TestGetTargetDataCenter_G
 		}
 	}
 
+	// Test non-allowed APIs
 	for apiName := range selectedAPIsForwardingRedirectionPolicyAPIAllowlist {
+		if _, ok := allowedAPIsForDeprecatedDomains[apiName]; ok {
+			continue // Skip allowed APIs
+		}
+
 		err := s.policy.WithDomainIDRedirect(context.Background(), s.domainID, apiName, callFn)
 		s.Error(err)
 		s.Equal("domain is deprecated.", err.Error())
@@ -434,9 +439,21 @@ func (s *selectedAPIsForwardingRedirectionPolicySuite) TestGetTargetDataCenter_G
 		s.Error(err)
 		s.Equal("domain is deprecated or deleted", err.Error())
 	}
-
 	s.Equal(0, currentClustercallCount)
 	s.Equal(0, alternativeClustercallCount)
+
+	// Test allowed APIs
+	for apiName := range allowedAPIsForDeprecatedDomains {
+		err := s.policy.WithDomainIDRedirect(context.Background(), s.domainID, apiName, callFn)
+		s.NoError(err)
+
+		err = s.policy.WithDomainNameRedirect(context.Background(), s.domainName, apiName, callFn)
+		s.NoError(err)
+	}
+
+	// Verify that allowed APIs were called on the current cluster
+	s.Equal(2*len(allowedAPIsForDeprecatedDomains), currentClustercallCount)
+	s.Equal(2, alternativeClustercallCount)
 }
 
 func (s *selectedAPIsForwardingRedirectionPolicySuite) setupLocalDomain() {
