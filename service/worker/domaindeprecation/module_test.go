@@ -23,67 +23,33 @@ package domaindeprecation
 import (
 	"testing"
 
-	"github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/require"
 	"github.com/uber-go/tally"
 	"go.uber.org/mock/gomock"
 
+	"github.com/uber/cadence/client"
 	"github.com/uber/cadence/common/metrics"
 	"github.com/uber/cadence/common/resource"
 )
 
-type moduleTestSuite struct {
-	suite.Suite
-	controller   *gomock.Controller
-	mockResource *resource.Test
+func Test__Start(t *testing.T) {
+	domainDeprecatationWorkerTest, mockResource := setupTest(t)
+	err := domainDeprecatationWorkerTest.Start()
+	require.NoError(t, err)
+
+	domainDeprecatationWorkerTest.Stop()
+	mockResource.Finish(t)
 }
 
-func TestModuleTestSuite(t *testing.T) {
-	suite.Run(t, new(moduleTestSuite))
-}
-
-func (s *moduleTestSuite) SetupTest() {
-	s.controller = gomock.NewController(s.T())
-	s.mockResource = resource.NewTest(s.T(), s.controller, metrics.Worker)
-}
-
-func (s *moduleTestSuite) TearDownTest() {
-	s.mockResource.Finish(s.T())
-}
-
-func (s *moduleTestSuite) TestNew() {
-	params := Params{
-		ServiceClient: s.mockResource.GetSDKClient(),
-		ClientBean:    s.mockResource.ClientBean,
-		Tally:         tally.NoopScope,
-		Logger:        s.mockResource.GetLogger(),
-	}
-
-	worker := New(params)
-	s.NotNil(worker)
-	s.IsType(&domainDeprecator{}, worker)
-}
-
-func (s *moduleTestSuite) TestStart() {
-	params := Params{
-		ServiceClient: s.mockResource.GetSDKClient(),
-		ClientBean:    s.mockResource.ClientBean,
-		Tally:         tally.NoopScope,
-		Logger:        s.mockResource.GetLogger(),
-	}
-
-	worker := New(params)
-	err := worker.Start()
-	s.NoError(err)
-}
-
-func (s *moduleTestSuite) TestStop() {
-	params := Params{
-		ServiceClient: s.mockResource.GetSDKClient(),
-		ClientBean:    s.mockResource.ClientBean,
-		Tally:         tally.NoopScope,
-		Logger:        s.mockResource.GetLogger(),
-	}
-
-	worker := New(params)
-	worker.Stop()
+func setupTest(t *testing.T) (DomainDeprecationWorker, *resource.Test) {
+	ctrl := gomock.NewController(t)
+	mockClientBean := client.NewMockBean(ctrl)
+	mockResource := resource.NewTest(t, ctrl, metrics.Worker)
+	mockSvcClient := mockResource.GetSDKClient()
+	return New(Params{
+		ServiceClient: mockSvcClient,
+		ClientBean:    mockClientBean,
+		Tally:         tally.TestScope(nil),
+		Logger:        mockResource.GetLogger(),
+	}), mockResource
 }
