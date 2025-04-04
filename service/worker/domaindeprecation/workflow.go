@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	domainDeprecationWorkflowTypeName = "cadence-sys-domain-deprecation-workflow"
+	domainDeprecationWorkflowTypeName = "domain-deprecation-workflow"
 	domainDeprecationTaskListName     = "domain-deprecation-tasklist"
 
 	disableArchivalActivity = "disableArchival"
