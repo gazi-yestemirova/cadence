@@ -22,16 +22,50 @@ package domaindeprecation
 
 import (
 	"context"
+	"fmt"
 
 	"go.uber.org/cadence/activity"
 	"go.uber.org/zap"
+
+	"github.com/uber/cadence/common/types"
 )
 
 // DisableArchivalActivity disables archival for the domain
 func (w *domainDeprecator) DisableArchivalActivity(ctx context.Context, domainName string) error {
+	client := w.clientBean.GetFrontendClient()
 	logger := activity.GetLogger(ctx)
-	logger.Info("Disabling archival for domain", zap.String("domain", domainName))
+	disabled := types.ArchivalStatusDisabled
 
-	// TODO: Implement archival disable logic
+	describeRequest := &types.DescribeDomainRequest{
+		Name: &domainName,
+	}
+	domainResp, err := client.DescribeDomain(ctx, describeRequest)
+	if err != nil {
+		return fmt.Errorf("failed to describe domain: %v", err)
+	}
+
+	// Check if archival is already disabled
+	if *domainResp.Configuration.VisibilityArchivalStatus == disabled &&
+		*domainResp.Configuration.HistoryArchivalStatus == disabled {
+		logger.Info("Archival is already disabled for domain", zap.String("domain", domainName))
+		return nil
+	}
+
+	updateRequest := &types.UpdateDomainRequest{
+		Name:                     domainName,
+		HistoryArchivalStatus:    &disabled,
+		VisibilityArchivalStatus: &disabled,
+	}
+	updateResp, err := client.UpdateDomain(ctx, updateRequest)
+	if err != nil {
+		return fmt.Errorf("failed to update domain: %v", err)
+	}
+
+	if *updateResp.Configuration.VisibilityArchivalStatus != disabled ||
+		*updateResp.Configuration.HistoryArchivalStatus != disabled {
+		return fmt.Errorf("failed to disable archival for domain %s", domainName)
+	}
+
+	logger.Info("Disabled archival for domain", zap.String("domain", domainName))
 	return nil
 }

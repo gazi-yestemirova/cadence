@@ -32,6 +32,7 @@ import (
 	"go.uber.org/cadence/worker"
 	"go.uber.org/cadence/workflow"
 
+	"github.com/uber/cadence/client"
 	"github.com/uber/cadence/common/constants"
 	"github.com/uber/cadence/common/log"
 )
@@ -43,14 +44,16 @@ type (
 	}
 
 	domainDeprecator struct {
-		svcClient workflowserviceclient.Interface
-		worker    worker.Worker
-		tally     tally.Scope
-		logger    log.Logger
+		svcClient  workflowserviceclient.Interface
+		clientBean client.Bean
+		worker     worker.Worker
+		tally      tally.Scope
+		logger     log.Logger
 	}
 
 	Params struct {
 		ServiceClient workflowserviceclient.Interface
+		ClientBean    client.Bean
 		Tally         tally.Scope
 		Logger        log.Logger
 	}
@@ -59,9 +62,10 @@ type (
 // New creates a new domain deprecation workflow.
 func New(params Params) DomainDeprecationWorker {
 	return &domainDeprecator{
-		svcClient: params.ServiceClient,
-		tally:     params.Tally,
-		logger:    params.Logger,
+		svcClient:  params.ServiceClient,
+		clientBean: params.ClientBean,
+		tally:      params.Tally,
+		logger:     params.Logger,
 	}
 }
 
