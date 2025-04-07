@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/uber-go/tally"
+	"go.uber.org/cadence/.gen/go/shared"
 	"go.uber.org/mock/gomock"
 
 	"github.com/uber/cadence/client"
@@ -33,19 +34,25 @@ import (
 )
 
 func Test__Start(t *testing.T) {
-	domainDeprecatationWorkerTest, mockResource := setupTest(t)
-	err := domainDeprecatationWorkerTest.Start()
+	domainDeprecationWorkerTest, mockResource := setupTest(t)
+	err := domainDeprecationWorkerTest.Start()
 	require.NoError(t, err)
 
-	domainDeprecatationWorkerTest.Stop()
+	domainDeprecationWorkerTest.Stop()
 	mockResource.Finish(t)
 }
 
 func setupTest(t *testing.T) (DomainDeprecationWorker, *resource.Test) {
 	ctrl := gomock.NewController(t)
-	mockClientBean := client.NewMockBean(ctrl)
+
 	mockResource := resource.NewTest(t, ctrl, metrics.Worker)
+	mockResource.SDKClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&shared.DescribeDomainResponse{}, nil).AnyTimes()
+	mockResource.SDKClient.EXPECT().PollForDecisionTask(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&shared.PollForDecisionTaskResponse{}, nil).AnyTimes()
+	mockResource.SDKClient.EXPECT().PollForActivityTask(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&shared.PollForActivityTaskResponse{}, nil).AnyTimes()
+
+	mockClientBean := client.NewMockBean(ctrl)
 	mockSvcClient := mockResource.GetSDKClient()
+
 	return New(Params{
 		ServiceClient: mockSvcClient,
 		ClientBean:    mockClientBean,

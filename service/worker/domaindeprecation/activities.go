@@ -24,16 +24,13 @@ import (
 	"context"
 	"fmt"
 
-	"go.uber.org/cadence/activity"
-	"go.uber.org/zap"
-
+	"github.com/uber/cadence/common/log/tag"
 	"github.com/uber/cadence/common/types"
 )
 
 // DisableArchivalActivity disables archival for the domain
 func (w *domainDeprecator) DisableArchivalActivity(ctx context.Context, domainName string) error {
 	client := w.clientBean.GetFrontendClient()
-	logger := activity.GetLogger(ctx)
 	disabled := types.ArchivalStatusDisabled
 
 	describeRequest := &types.DescribeDomainRequest{
@@ -47,7 +44,7 @@ func (w *domainDeprecator) DisableArchivalActivity(ctx context.Context, domainNa
 	// Check if archival is already disabled
 	if *domainResp.Configuration.VisibilityArchivalStatus == disabled &&
 		*domainResp.Configuration.HistoryArchivalStatus == disabled {
-		logger.Info("Archival is already disabled for domain", zap.String("domain", domainName))
+		w.logger.Info("Archival is already disabled for domain", tag.WorkflowDomainName(domainName))
 		return nil
 	}
 
@@ -66,6 +63,6 @@ func (w *domainDeprecator) DisableArchivalActivity(ctx context.Context, domainNa
 		return fmt.Errorf("failed to disable archival for domain %s", domainName)
 	}
 
-	logger.Info("Disabled archival for domain", zap.String("domain", domainName))
+	w.logger.Info("Disabled archival for domain", tag.WorkflowDomainName(domainName))
 	return nil
 }

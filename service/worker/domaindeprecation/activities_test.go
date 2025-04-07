@@ -29,36 +29,9 @@ import (
 
 	"github.com/uber/cadence/client"
 	"github.com/uber/cadence/client/frontend"
+	"github.com/uber/cadence/common/log/testlogger"
 	"github.com/uber/cadence/common/types"
 )
-
-func mockDescribeDomain(mockClient *frontend.MockClient, visibilityStatus, historyStatus types.ArchivalStatus, err error) {
-	if err != nil {
-		mockClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(nil, err)
-	} else {
-		mockClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(
-			&types.DescribeDomainResponse{
-				Configuration: &types.DomainConfiguration{
-					VisibilityArchivalStatus: &visibilityStatus,
-					HistoryArchivalStatus:    &historyStatus,
-				},
-			}, nil)
-	}
-}
-
-func mockUpdateDomain(mockClient *frontend.MockClient, visibilityStatus, historyStatus types.ArchivalStatus, err error) {
-	if err != nil {
-		mockClient.EXPECT().UpdateDomain(gomock.Any(), gomock.Any()).Return(nil, err)
-	} else {
-		mockClient.EXPECT().UpdateDomain(gomock.Any(), gomock.Any()).Return(
-			&types.UpdateDomainResponse{
-				Configuration: &types.DomainConfiguration{
-					VisibilityArchivalStatus: &visibilityStatus,
-					HistoryArchivalStatus:    &historyStatus,
-				},
-			}, nil)
-	}
-}
 
 func TestDisableArchivalActivity(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -70,6 +43,7 @@ func TestDisableArchivalActivity(t *testing.T) {
 
 	deprecator := &domainDeprecator{
 		clientBean: mockClientBean,
+		logger:     testlogger.New(t),
 	}
 
 	testDomain := "test-domain"
@@ -84,30 +58,66 @@ func TestDisableArchivalActivity(t *testing.T) {
 		{
 			name: "Success - Disable archival",
 			setupMocks: func() {
-				mockDescribeDomain(mockClient, enabled, enabled, nil)
-				mockUpdateDomain(mockClient, disabled, disabled, nil)
+				mockClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(
+					&types.DescribeDomainResponse{
+						Configuration: &types.DomainConfiguration{
+							VisibilityArchivalStatus: &enabled,
+							HistoryArchivalStatus:    &enabled,
+						},
+					}, nil)
+				mockClient.EXPECT().UpdateDomain(gomock.Any(), gomock.Any()).Return(
+					&types.UpdateDomainResponse{
+						Configuration: &types.DomainConfiguration{
+							VisibilityArchivalStatus: &disabled,
+							HistoryArchivalStatus:    &disabled,
+						},
+					}, nil)
 			},
 			expectedError: nil,
 		},
 		{
 			name: "Success - Archival already disabled",
 			setupMocks: func() {
-				mockDescribeDomain(mockClient, disabled, disabled, nil)
+				mockClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(
+					&types.DescribeDomainResponse{
+						Configuration: &types.DomainConfiguration{
+							VisibilityArchivalStatus: &disabled,
+							HistoryArchivalStatus:    &disabled,
+						},
+					}, nil)
 			},
 			expectedError: nil,
 		},
 		{
 			name: "Error - Describe domain fails",
 			setupMocks: func() {
-				mockDescribeDomain(mockClient, enabled, enabled, assert.AnError)
+				mockClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(
+					&types.DescribeDomainResponse{
+						Configuration: &types.DomainConfiguration{
+							VisibilityArchivalStatus: &enabled,
+							HistoryArchivalStatus:    &enabled,
+						},
+					}, assert.AnError)
 			},
 			expectedError: assert.AnError,
 		},
 		{
 			name: "Error - Update domain fails",
 			setupMocks: func() {
-				mockDescribeDomain(mockClient, enabled, enabled, nil)
-				mockUpdateDomain(mockClient, enabled, enabled, assert.AnError)
+				mockClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(
+					&types.DescribeDomainResponse{
+						Configuration: &types.DomainConfiguration{
+							VisibilityArchivalStatus: &enabled,
+							HistoryArchivalStatus:    &enabled,
+						},
+					}, nil)
+				mockClient.EXPECT().UpdateDomain(gomock.Any(), gomock.Any()).Return(
+					&types.UpdateDomainResponse{
+						Configuration: &types.DomainConfiguration{
+							VisibilityArchivalStatus: &enabled,
+							HistoryArchivalStatus:    &enabled,
+						},
+					}, assert.AnError)
 			},
 			expectedError: assert.AnError,
 		},
