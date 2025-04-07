@@ -31,6 +31,7 @@ import (
 	"go.uber.org/cadence/workflow"
 	"go.uber.org/mock/gomock"
 
+	"github.com/uber/cadence/common/dynamicconfig"
 	"github.com/uber/cadence/common/metrics"
 	"github.com/uber/cadence/common/resource"
 )
@@ -52,6 +53,9 @@ func (s *domainDeprecationWorkflowTestSuite) SetupTest() {
 	mockResource := resource.NewTest(s.T(), controller, metrics.Worker)
 	publicClient := mockResource.GetSDKClient()
 	s.deprecator = &domainDeprecator{
+		cfg: Config{
+			AdminOperationToken: dynamicconfig.GetStringPropertyFn(""),
+		},
 		svcClient:  publicClient,
 		clientBean: mockResource.ClientBean,
 		tally:      tally.NoopScope,

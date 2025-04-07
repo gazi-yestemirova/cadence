@@ -41,6 +41,9 @@ var (
 		BackoffCoefficient: 1.7,
 		MaximumInterval:    5 * time.Minute,
 		ExpirationInterval: 10 * time.Minute,
+		NonRetriableErrorReasons: []string{
+			errDomainDoesNotExistNonRetryable,
+		},
 	}
 
 	activityOptions = workflow.ActivityOptions{

@@ -29,6 +29,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/uber/cadence/client"
+	"github.com/uber/cadence/common/dynamicconfig"
 	"github.com/uber/cadence/common/metrics"
 	"github.com/uber/cadence/common/resource"
 )
@@ -54,6 +55,9 @@ func setupTest(t *testing.T) (DomainDeprecationWorker, *resource.Test) {
 	mockSvcClient := mockResource.GetSDKClient()
 
 	return New(Params{
+		Config: Config{
+			AdminOperationToken: dynamicconfig.GetStringPropertyFn(""),
+		},
 		ServiceClient: mockSvcClient,
 		ClientBean:    mockClientBean,
 		Tally:         tally.TestScope(nil),

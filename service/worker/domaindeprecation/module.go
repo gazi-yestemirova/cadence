@@ -34,6 +34,7 @@ import (
 
 	"github.com/uber/cadence/client"
 	"github.com/uber/cadence/common/constants"
+	"github.com/uber/cadence/common/dynamicconfig"
 	"github.com/uber/cadence/common/log"
 )
 
@@ -43,7 +44,14 @@ type (
 		Stop()
 	}
 
+	// Config defines the configuration for domain deprecator
+	Config struct {
+		// AdminOperationToken is a dynamic config that provides the security token for admin operations
+		AdminOperationToken dynamicconfig.StringPropertyFn
+	}
+
 	domainDeprecator struct {
+		cfg        Config
 		svcClient  workflowserviceclient.Interface
 		clientBean client.Bean
 		worker     worker.Worker
@@ -52,6 +60,7 @@ type (
 	}
 
 	Params struct {
+		Config        Config
 		ServiceClient workflowserviceclient.Interface
 		ClientBean    client.Bean
 		Tally         tally.Scope
@@ -62,6 +71,7 @@ type (
 // New creates a new domain deprecation workflow.
 func New(params Params) DomainDeprecationWorker {
 	return &domainDeprecator{
+		cfg:        params.Config,
 		svcClient:  params.ServiceClient,
 		clientBean: params.ClientBean,
 		tally:      params.Tally,

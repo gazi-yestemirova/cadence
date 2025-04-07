@@ -29,6 +29,7 @@ import (
 
 	"github.com/uber/cadence/client"
 	"github.com/uber/cadence/client/frontend"
+	"github.com/uber/cadence/common/dynamicconfig"
 	"github.com/uber/cadence/common/log/testlogger"
 	"github.com/uber/cadence/common/types"
 )
@@ -42,6 +43,9 @@ func TestDisableArchivalActivity(t *testing.T) {
 	mockClientBean.EXPECT().GetFrontendClient().Return(mockClient).AnyTimes()
 
 	deprecator := &domainDeprecator{
+		cfg: Config{
+			AdminOperationToken: dynamicconfig.GetStringPropertyFn(""),
+		},
 		clientBean: mockClientBean,
 		logger:     testlogger.New(t),
 	}
@@ -92,12 +96,7 @@ func TestDisableArchivalActivity(t *testing.T) {
 			name: "Error - Describe domain fails",
 			setupMocks: func() {
 				mockClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(
-					&types.DescribeDomainResponse{
-						Configuration: &types.DomainConfiguration{
-							VisibilityArchivalStatus: &enabled,
-							HistoryArchivalStatus:    &enabled,
-						},
-					}, assert.AnError)
+					nil, assert.AnError)
 			},
 			expectedError: assert.AnError,
 		},
@@ -112,12 +111,16 @@ func TestDisableArchivalActivity(t *testing.T) {
 						},
 					}, nil)
 				mockClient.EXPECT().UpdateDomain(gomock.Any(), gomock.Any()).Return(
-					&types.UpdateDomainResponse{
-						Configuration: &types.DomainConfiguration{
-							VisibilityArchivalStatus: &enabled,
-							HistoryArchivalStatus:    &enabled,
-						},
-					}, assert.AnError)
+					nil, assert.AnError)
+			},
+			expectedError: assert.AnError,
+		},
+		{
+			name: "Error - Domain does not exist",
+			setupMocks: func() {
+				mockClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(
+					nil, types.EntityNotExistsError{},
+				)
 			},
 			expectedError: assert.AnError,
 		},

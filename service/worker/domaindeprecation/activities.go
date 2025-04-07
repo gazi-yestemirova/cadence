@@ -22,6 +22,7 @@ package domaindeprecation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/uber/cadence/common/log/tag"
@@ -38,7 +39,13 @@ func (w *domainDeprecator) DisableArchivalActivity(ctx context.Context, domainNa
 	}
 	domainResp, err := client.DescribeDomain(ctx, describeRequest)
 	if err != nil {
+		var entityNotExistsError *types.EntityNotExistsError
+		if errors.As(err, &entityNotExistsError) {
+			return types.EntityNotExistsError{Message: errDomainDoesNotExistNonRetryable}
+		}
+
 		return fmt.Errorf("failed to describe domain: %v", err)
+
 	}
 
 	// Check if archival is already disabled
@@ -52,6 +59,7 @@ func (w *domainDeprecator) DisableArchivalActivity(ctx context.Context, domainNa
 		Name:                     domainName,
 		HistoryArchivalStatus:    &disabled,
 		VisibilityArchivalStatus: &disabled,
+		SecurityToken:            w.cfg.AdminOperationToken(),
 	}
 	updateResp, err := client.UpdateDomain(ctx, updateRequest)
 	if err != nil {
