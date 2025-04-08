@@ -78,6 +78,7 @@ type (
 		BatcherCfg                          *batcher.Config
 		ESAnalyzerCfg                       *esanalyzer.Config
 		failoverManagerCfg                  *failovermanager.Config
+		domainDeprecatorCfg                 *domaindeprecation.Config
 		ThrottledLogRPS                     dynamicconfig.IntPropertyFn
 		PersistenceGlobalMaxQPS             dynamicconfig.IntPropertyFn
 		PersistenceMaxQPS                   dynamicconfig.IntPropertyFn
@@ -176,6 +177,7 @@ func NewConfig(params *resource.Params) *Config {
 			ESAnalyzerWorkflowVersionDomains:         dc.GetStringProperty(dynamicconfig.ESAnalyzerWorkflowVersionMetricDomains),
 			ESAnalyzerWorkflowTypeDomains:            dc.GetStringProperty(dynamicconfig.ESAnalyzerWorkflowTypeMetricDomains),
 		},
+		domainDeprecatorCfg:                 &domaindeprecation.Config{AdminOperationToken: dc.GetStringProperty(dynamicconfig.AdminOperationToken)},
 		EnableBatcher:                       dc.GetBoolProperty(dynamicconfig.EnableBatcher),
 		EnableParentClosePolicyWorker:       dc.GetBoolProperty(dynamicconfig.EnableParentClosePolicyWorker),
 		NumParentClosePolicySystemWorkflows: dc.GetIntProperty(dynamicconfig.NumParentClosePolicySystemWorkflows),
@@ -474,16 +476,8 @@ func (s *Service) startAsyncWorkflowConsumerManager() common.Daemon {
 }
 
 func (s *Service) startDomainDeprecation() {
-	dc := dynamicconfig.NewCollection(
-		s.params.DynamicConfig,
-		s.params.Logger,
-		dynamicconfig.ClusterNameFilter(s.params.ClusterMetadata.GetCurrentClusterName()),
-	)
-
 	params := domaindeprecation.Params{
-		Config: domaindeprecation.Config{
-			AdminOperationToken: dc.GetStringProperty(dynamicconfig.AdminOperationToken),
-		},
+		Config:        *s.config.domainDeprecatorCfg,
 		ServiceClient: s.params.PublicClient,
 		ClientBean:    s.GetClientBean(),
 		Tally:         s.params.MetricScope,
