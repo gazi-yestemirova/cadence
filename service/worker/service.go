@@ -42,6 +42,7 @@ import (
 	"github.com/uber/cadence/service/worker/asyncworkflow"
 	"github.com/uber/cadence/service/worker/batcher"
 	"github.com/uber/cadence/service/worker/diagnostics"
+	"github.com/uber/cadence/service/worker/domaindeprecation"
 	"github.com/uber/cadence/service/worker/esanalyzer"
 	"github.com/uber/cadence/service/worker/failovermanager"
 	"github.com/uber/cadence/service/worker/indexer"
@@ -230,6 +231,7 @@ func (s *Service) Start() {
 
 	s.startReplicator()
 	s.startDiagnostics()
+	s.startDomainDeprecation()
 
 	if s.GetArchivalMetadata().GetHistoryConfig().ClusterConfiguredForArchival() {
 		s.startArchiver()
@@ -469,6 +471,29 @@ func (s *Service) startAsyncWorkflowConsumerManager() common.Daemon {
 	)
 	cm.Start()
 	return cm
+}
+
+func (s *Service) startDomainDeprecation() {
+	dc := dynamicconfig.NewCollection(
+		s.params.DynamicConfig,
+		s.params.Logger,
+		dynamicconfig.ClusterNameFilter(s.params.ClusterMetadata.GetCurrentClusterName()),
+	)
+
+	params := domaindeprecation.Params{
+		Config: domaindeprecation.Config{
+			AdminOperationToken: dc.GetStringProperty(dynamicconfig.AdminOperationToken),
+		},
+		ServiceClient: s.params.PublicClient,
+		ClientBean:    s.GetClientBean(),
+		Tally:         s.params.MetricScope,
+		Logger:        s.GetLogger(),
+	}
+
+	if err := domaindeprecation.New(params).Start(); err != nil {
+		s.Stop()
+		s.GetLogger().Fatal("error starting domain deprecator", tag.Error(err))
+	}
 }
 
 func (s *Service) ensureDomainExists(domain string) {
