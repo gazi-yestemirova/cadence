@@ -33,6 +33,7 @@ import (
 	"github.com/uber/cadence/common/constants"
 	"github.com/uber/cadence/common/domain"
 	"github.com/uber/cadence/common/dynamicconfig"
+	"github.com/uber/cadence/common/dynamicconfig/dynamicproperties"
 	"github.com/uber/cadence/common/log/tag"
 	"github.com/uber/cadence/common/persistence"
 	"github.com/uber/cadence/common/resource"
@@ -125,57 +126,57 @@ func NewConfig(params *resource.Params) *Config {
 	dc := dynamicconfig.NewCollection(
 		params.DynamicConfig,
 		params.Logger,
-		dynamicconfig.ClusterNameFilter(params.ClusterMetadata.GetCurrentClusterName()),
+		dynamicproperties.ClusterNameFilter(params.ClusterMetadata.GetCurrentClusterName()),
 	)
 	config := &Config{
 		ArchiverConfig: &archiver.Config{
-			ArchiverConcurrency:             dc.GetIntProperty(dynamicconfig.WorkerArchiverConcurrency),
-			ArchivalsPerIteration:           dc.GetIntProperty(dynamicconfig.WorkerArchivalsPerIteration),
-			TimeLimitPerArchivalIteration:   dc.GetDurationProperty(dynamicconfig.WorkerTimeLimitPerArchivalIteration),
-			AllowArchivingIncompleteHistory: dc.GetBoolProperty(dynamicconfig.AllowArchivingIncompleteHistory),
+			ArchiverConcurrency:             dc.GetIntProperty(dynamicproperties.WorkerArchiverConcurrency),
+			ArchivalsPerIteration:           dc.GetIntProperty(dynamicproperties.WorkerArchivalsPerIteration),
+			TimeLimitPerArchivalIteration:   dc.GetDurationProperty(dynamicproperties.WorkerTimeLimitPerArchivalIteration),
+			AllowArchivingIncompleteHistory: dc.GetBoolProperty(dynamicproperties.AllowArchivingIncompleteHistory),
 		},
 		ScannerCfg: &scanner.Config{
-			ScannerPersistenceMaxQPS: dc.GetIntProperty(dynamicconfig.ScannerPersistenceMaxQPS),
+			ScannerPersistenceMaxQPS: dc.GetIntProperty(dynamicproperties.ScannerPersistenceMaxQPS),
 			TaskListScannerOptions: tasklist.Options{
-				GetOrphanTasksPageSizeFn: dc.GetIntProperty(dynamicconfig.ScannerGetOrphanTasksPageSize),
-				TaskBatchSizeFn:          dc.GetIntProperty(dynamicconfig.ScannerBatchSizeForTasklistHandler),
-				EnableCleaning:           dc.GetBoolProperty(dynamicconfig.EnableCleaningOrphanTaskInTasklistScavenger),
-				MaxTasksPerJobFn:         dc.GetIntProperty(dynamicconfig.ScannerMaxTasksProcessedPerTasklistJob),
+				GetOrphanTasksPageSizeFn: dc.GetIntProperty(dynamicproperties.ScannerGetOrphanTasksPageSize),
+				TaskBatchSizeFn:          dc.GetIntProperty(dynamicproperties.ScannerBatchSizeForTasklistHandler),
+				EnableCleaning:           dc.GetBoolProperty(dynamicproperties.EnableCleaningOrphanTaskInTasklistScavenger),
+				MaxTasksPerJobFn:         dc.GetIntProperty(dynamicproperties.ScannerMaxTasksProcessedPerTasklistJob),
 			},
 			Persistence:            &params.PersistenceConfig,
 			ClusterMetadata:        params.ClusterMetadata,
-			TaskListScannerEnabled: dc.GetBoolProperty(dynamicconfig.TaskListScannerEnabled),
-			HistoryScannerEnabled:  dc.GetBoolProperty(dynamicconfig.HistoryScannerEnabled),
+			TaskListScannerEnabled: dc.GetBoolProperty(dynamicproperties.TaskListScannerEnabled),
+			HistoryScannerEnabled:  dc.GetBoolProperty(dynamicproperties.HistoryScannerEnabled),
 			ShardScanners: []*shardscanner.ScannerConfig{
 				executions.ConcreteExecutionConfig(dc),
 				executions.CurrentExecutionConfig(dc),
 				timers.ScannerConfig(dc),
 			},
-			MaxWorkflowRetentionInDays: dc.GetIntProperty(dynamicconfig.MaxRetentionDays),
+			MaxWorkflowRetentionInDays: dc.GetIntProperty(dynamicproperties.MaxRetentionDays),
 		},
 		KafkaCfg: params.KafkaConfig,
 		BatcherCfg: &batcher.Config{
-			AdminOperationToken: dc.GetStringProperty(dynamicconfig.AdminOperationToken),
+			AdminOperationToken: dc.GetStringProperty(dynamicproperties.AdminOperationToken),
 			ClusterMetadata:     params.ClusterMetadata,
 		},
 		failoverManagerCfg: &failovermanager.Config{
-			AdminOperationToken: dc.GetStringProperty(dynamicconfig.AdminOperationToken),
+			AdminOperationToken: dc.GetStringProperty(dynamicproperties.AdminOperationToken),
 			ClusterMetadata:     params.ClusterMetadata,
 		},
 		ESAnalyzerCfg: &esanalyzer.Config{
-			ESAnalyzerPause:                          dc.GetBoolProperty(dynamicconfig.ESAnalyzerPause),
-			ESAnalyzerTimeWindow:                     dc.GetDurationProperty(dynamicconfig.ESAnalyzerTimeWindow),
-			ESAnalyzerMaxNumDomains:                  dc.GetIntProperty(dynamicconfig.ESAnalyzerMaxNumDomains),
-			ESAnalyzerMaxNumWorkflowTypes:            dc.GetIntProperty(dynamicconfig.ESAnalyzerMaxNumWorkflowTypes),
-			ESAnalyzerLimitToTypes:                   dc.GetStringProperty(dynamicconfig.ESAnalyzerLimitToTypes),
-			ESAnalyzerEnableAvgDurationBasedChecks:   dc.GetBoolProperty(dynamicconfig.ESAnalyzerEnableAvgDurationBasedChecks),
-			ESAnalyzerLimitToDomains:                 dc.GetStringProperty(dynamicconfig.ESAnalyzerLimitToDomains),
-			ESAnalyzerNumWorkflowsToRefresh:          dc.GetIntPropertyFilteredByWorkflowType(dynamicconfig.ESAnalyzerNumWorkflowsToRefresh),
-			ESAnalyzerBufferWaitTime:                 dc.GetDurationPropertyFilteredByWorkflowType(dynamicconfig.ESAnalyzerBufferWaitTime),
-			ESAnalyzerMinNumWorkflowsForAvg:          dc.GetIntPropertyFilteredByWorkflowType(dynamicconfig.ESAnalyzerMinNumWorkflowsForAvg),
-			ESAnalyzerWorkflowDurationWarnThresholds: dc.GetStringProperty(dynamicconfig.ESAnalyzerWorkflowDurationWarnThresholds),
-			ESAnalyzerWorkflowVersionDomains:         dc.GetStringProperty(dynamicconfig.ESAnalyzerWorkflowVersionMetricDomains),
-			ESAnalyzerWorkflowTypeDomains:            dc.GetStringProperty(dynamicconfig.ESAnalyzerWorkflowTypeMetricDomains),
+			ESAnalyzerPause:                          dc.GetBoolProperty(dynamicproperties.ESAnalyzerPause),
+			ESAnalyzerTimeWindow:                     dc.GetDurationProperty(dynamicproperties.ESAnalyzerTimeWindow),
+			ESAnalyzerMaxNumDomains:                  dc.GetIntProperty(dynamicproperties.ESAnalyzerMaxNumDomains),
+			ESAnalyzerMaxNumWorkflowTypes:            dc.GetIntProperty(dynamicproperties.ESAnalyzerMaxNumWorkflowTypes),
+			ESAnalyzerLimitToTypes:                   dc.GetStringProperty(dynamicproperties.ESAnalyzerLimitToTypes),
+			ESAnalyzerEnableAvgDurationBasedChecks:   dc.GetBoolProperty(dynamicproperties.ESAnalyzerEnableAvgDurationBasedChecks),
+			ESAnalyzerLimitToDomains:                 dc.GetStringProperty(dynamicproperties.ESAnalyzerLimitToDomains),
+			ESAnalyzerNumWorkflowsToRefresh:          dc.GetIntPropertyFilteredByWorkflowType(dynamicproperties.ESAnalyzerNumWorkflowsToRefresh),
+			ESAnalyzerBufferWaitTime:                 dc.GetDurationPropertyFilteredByWorkflowType(dynamicproperties.ESAnalyzerBufferWaitTime),
+			ESAnalyzerMinNumWorkflowsForAvg:          dc.GetIntPropertyFilteredByWorkflowType(dynamicproperties.ESAnalyzerMinNumWorkflowsForAvg),
+			ESAnalyzerWorkflowDurationWarnThresholds: dc.GetStringProperty(dynamicproperties.ESAnalyzerWorkflowDurationWarnThresholds),
+			ESAnalyzerWorkflowVersionDomains:         dc.GetStringProperty(dynamicproperties.ESAnalyzerWorkflowVersionMetricDomains),
+			ESAnalyzerWorkflowTypeDomains:            dc.GetStringProperty(dynamicproperties.ESAnalyzerWorkflowTypeMetricDomains),
 		},
 		domainDeprecatorCfg:                 &domaindeprecation.Config{AdminOperationToken: dc.GetStringProperty(dynamicconfig.AdminOperationToken)},
 		EnableBatcher:                       dc.GetBoolProperty(dynamicconfig.EnableBatcher),
@@ -191,18 +192,18 @@ func NewConfig(params *resource.Params) *Config {
 		HostName:                            params.HostName,
 	}
 	advancedVisWritingMode := dc.GetStringProperty(
-		dynamicconfig.WriteVisibilityStoreName,
+		dynamicproperties.WriteVisibilityStoreName,
 	)
 
 	if shouldStartIndexer(params, advancedVisWritingMode) {
 		config.IndexerCfg = &indexer.Config{
-			IndexerConcurrency:             dc.GetIntProperty(dynamicconfig.WorkerIndexerConcurrency),
-			ESProcessorNumOfWorkers:        dc.GetIntProperty(dynamicconfig.WorkerESProcessorNumOfWorkers),
-			ESProcessorBulkActions:         dc.GetIntProperty(dynamicconfig.WorkerESProcessorBulkActions),
-			ESProcessorBulkSize:            dc.GetIntProperty(dynamicconfig.WorkerESProcessorBulkSize),
-			ESProcessorFlushInterval:       dc.GetDurationProperty(dynamicconfig.WorkerESProcessorFlushInterval),
-			ValidSearchAttributes:          dc.GetMapProperty(dynamicconfig.ValidSearchAttributes),
-			EnableQueryAttributeValidation: dc.GetBoolProperty(dynamicconfig.EnableQueryAttributeValidation),
+			IndexerConcurrency:             dc.GetIntProperty(dynamicproperties.WorkerIndexerConcurrency),
+			ESProcessorNumOfWorkers:        dc.GetIntProperty(dynamicproperties.WorkerESProcessorNumOfWorkers),
+			ESProcessorBulkActions:         dc.GetIntProperty(dynamicproperties.WorkerESProcessorBulkActions),
+			ESProcessorBulkSize:            dc.GetIntProperty(dynamicproperties.WorkerESProcessorBulkSize),
+			ESProcessorFlushInterval:       dc.GetDurationProperty(dynamicproperties.WorkerESProcessorFlushInterval),
+			ValidSearchAttributes:          dc.GetMapProperty(dynamicproperties.ValidSearchAttributes),
+			EnableQueryAttributeValidation: dc.GetBoolProperty(dynamicproperties.EnableQueryAttributeValidation),
 		}
 	}
 
@@ -544,7 +545,7 @@ func getDomainID(domain string) string {
 	return domainID
 }
 
-func shouldStartIndexer(params *resource.Params, advancedWritingMode dynamicconfig.StringPropertyFn) bool {
+func shouldStartIndexer(params *resource.Params, advancedWritingMode dynamicproperties.StringPropertyFn) bool {
 	// only start indexer when advanced visibility writing mode is set to on and advanced visibility store is configured
 	if !common.IsAdvancedVisibilityWritingEnabled(advancedWritingMode(), params.PersistenceConfig.IsAdvancedVisibilityConfigExist()) {
 		return false
