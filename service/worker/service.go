@@ -72,7 +72,7 @@ type (
 
 	// Config contains all the service config for worker
 	Config struct {
-		AdminOperationToken                 dynamicconfig.StringPropertyFn
+		AdminOperationToken                 dynamicproperties.StringPropertyFn
 		KafkaCfg                            config.KafkaConfig
 		ArchiverConfig                      *archiver.Config
 		IndexerCfg                          *indexer.Config
@@ -129,7 +129,7 @@ func NewConfig(params *resource.Params) *Config {
 		dynamicproperties.ClusterNameFilter(params.ClusterMetadata.GetCurrentClusterName()),
 	)
 	config := &Config{
-		AdminOperationToken: dc.GetStringProperty(dynamicconfig.AdminOperationToken),
+		AdminOperationToken: dc.GetStringProperty(dynamicproperties.AdminOperationToken),
 		ArchiverConfig: &archiver.Config{
 			ArchiverConcurrency:             dc.GetIntProperty(dynamicproperties.WorkerArchiverConcurrency),
 			ArchivalsPerIteration:           dc.GetIntProperty(dynamicproperties.WorkerArchivalsPerIteration),

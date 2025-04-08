@@ -29,7 +29,7 @@ import (
 
 	"github.com/uber/cadence/client"
 	"github.com/uber/cadence/client/frontend"
-	"github.com/uber/cadence/common/dynamicconfig"
+	"github.com/uber/cadence/common/dynamicconfig/dynamicproperties"
 	"github.com/uber/cadence/common/log/testlogger"
 	"github.com/uber/cadence/common/types"
 )
@@ -44,7 +44,7 @@ func TestDisableArchivalActivity(t *testing.T) {
 
 	deprecator := &domainDeprecator{
 		cfg: Config{
-			AdminOperationToken: dynamicconfig.GetStringPropertyFn(""),
+			AdminOperationToken: dynamicproperties.GetStringPropertyFn(""),
 		},
 		clientBean: mockClientBean,
 		logger:     testlogger.New(t),
