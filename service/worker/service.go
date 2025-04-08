@@ -71,6 +71,7 @@ type (
 
 	// Config contains all the service config for worker
 	Config struct {
+		AdminOperationToken                 dynamicconfig.StringPropertyFn
 		KafkaCfg                            config.KafkaConfig
 		ArchiverConfig                      *archiver.Config
 		IndexerCfg                          *indexer.Config
@@ -78,7 +79,6 @@ type (
 		BatcherCfg                          *batcher.Config
 		ESAnalyzerCfg                       *esanalyzer.Config
 		failoverManagerCfg                  *failovermanager.Config
-		domainDeprecatorCfg                 *domaindeprecation.Config
 		ThrottledLogRPS                     dynamicconfig.IntPropertyFn
 		PersistenceGlobalMaxQPS             dynamicconfig.IntPropertyFn
 		PersistenceMaxQPS                   dynamicconfig.IntPropertyFn
@@ -128,6 +128,7 @@ func NewConfig(params *resource.Params) *Config {
 		dynamicconfig.ClusterNameFilter(params.ClusterMetadata.GetCurrentClusterName()),
 	)
 	config := &Config{
+		AdminOperationToken: dc.GetStringProperty(dynamicconfig.AdminOperationToken),
 		ArchiverConfig: &archiver.Config{
 			ArchiverConcurrency:             dc.GetIntProperty(dynamicconfig.WorkerArchiverConcurrency),
 			ArchivalsPerIteration:           dc.GetIntProperty(dynamicconfig.WorkerArchivalsPerIteration),
@@ -177,7 +178,6 @@ func NewConfig(params *resource.Params) *Config {
 			ESAnalyzerWorkflowVersionDomains:         dc.GetStringProperty(dynamicconfig.ESAnalyzerWorkflowVersionMetricDomains),
 			ESAnalyzerWorkflowTypeDomains:            dc.GetStringProperty(dynamicconfig.ESAnalyzerWorkflowTypeMetricDomains),
 		},
-		domainDeprecatorCfg:                 &domaindeprecation.Config{AdminOperationToken: dc.GetStringProperty(dynamicconfig.AdminOperationToken)},
 		EnableBatcher:                       dc.GetBoolProperty(dynamicconfig.EnableBatcher),
 		EnableParentClosePolicyWorker:       dc.GetBoolProperty(dynamicconfig.EnableParentClosePolicyWorker),
 		NumParentClosePolicySystemWorkflows: dc.GetIntProperty(dynamicconfig.NumParentClosePolicySystemWorkflows),
@@ -477,7 +477,9 @@ func (s *Service) startAsyncWorkflowConsumerManager() common.Daemon {
 
 func (s *Service) startDomainDeprecation() {
 	params := domaindeprecation.Params{
-		Config:        *s.config.domainDeprecatorCfg,
+		Config: domaindeprecation.Config{
+			AdminOperationToken: s.config.AdminOperationToken,
+		},
 		ServiceClient: s.params.PublicClient,
 		ClientBean:    s.GetClientBean(),
 		Tally:         s.params.MetricScope,
