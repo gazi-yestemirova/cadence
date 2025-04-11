@@ -62,7 +62,7 @@ func (w *domainDeprecator) DomainDeprecationWorkflow(ctx workflow.Context, domai
 	// Step 1: Activity disables archival
 	err := workflow.ExecuteActivity(
 		workflow.WithActivityOptions(ctx, activityOptions),
-		disableArchivalActivity,
+		w.DisableArchivalActivity,
 		domainName,
 	).Get(ctx, nil)
 	if err != nil {
@@ -72,7 +72,7 @@ func (w *domainDeprecator) DomainDeprecationWorkflow(ctx workflow.Context, domai
 	// Step 2: Deprecate a domain
 	err = workflow.ExecuteActivity(
 		workflow.WithActivityOptions(ctx, activityOptions),
-		deprecateDomainActivity,
+		w.DeprecateDomainActivity,
 		domainName,
 	).Get(ctx, nil)
 	if err != nil {
