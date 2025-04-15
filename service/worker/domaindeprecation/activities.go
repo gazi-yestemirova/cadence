@@ -24,12 +24,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"go.uber.org/cadence"
+	"golang.org/x/time/rate"
+
 	"github.com/uber/cadence/common/log/tag"
 	"github.com/uber/cadence/common/types"
-	"go.uber.org/cadence"
 )
-
-const defaultPageSize = 1000
 
 // DisableArchivalActivity disables archival for the domain
 func (w *domainDeprecator) DisableArchivalActivity(ctx context.Context, params DomainActivityParams) error {
@@ -92,10 +93,12 @@ func (w *domainDeprecator) DeprecateDomainActivity(ctx context.Context, params D
 
 func (w *domainDeprecator) ListOpenWorkflowsActivity(ctx context.Context, domainParams DomainActivityParams) ([]WorkflowDetails, error) {
 	client := w.clientBean.GetFrontendClient()
+	rateLimiter := rate.NewLimiter(rate.Limit(DefaultRPS), DefaultRPS)
+
 	listParams := ListWorkflowExecutionParams{
 		openWorkflowsQuery: "CloseTime = missing",
 		nextPageToken:      nil,
-		pageSize:           defaultPageSize,
+		pageSize:           DefaultPageSize,
 	}
 	workflowDetails := make([]WorkflowDetails, 0)
 
@@ -126,12 +129,17 @@ func (w *domainDeprecator) ListOpenWorkflowsActivity(ctx context.Context, domain
 		if listParams.nextPageToken == nil {
 			break
 		}
+		err = rateLimiter.Wait(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return workflowDetails, nil
 }
 
 func (w *domainDeprecator) TerminateWorkflowsActivity(ctx context.Context, params TerminateWorkflowsActivityParams) error {
 	client := w.clientBean.GetFrontendClient()
+	rateLimiter := rate.NewLimiter(rate.Limit(DefaultRPS), DefaultRPS)
 
 	for _, workflow := range params.WorkflowDetails {
 		err := client.TerminateWorkflowExecution(ctx, &types.TerminateWorkflowExecutionRequest{
@@ -149,6 +157,11 @@ func (w *domainDeprecator) TerminateWorkflowsActivity(ctx context.Context, param
 			if errors.As(err, &entityNotExistsError) {
 				continue
 			}
+			return err
+		}
+
+		err = rateLimiter.Wait(ctx)
+		if err != nil {
 			return err
 		}
 	}

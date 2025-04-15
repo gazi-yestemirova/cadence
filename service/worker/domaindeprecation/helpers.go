@@ -25,4 +25,8 @@ package domaindeprecation
 // ErrDomainDoesNotExistNonRetryable is error reason strings used for Cadence non-retryable errors
 const (
 	ErrDomainDoesNotExistNonRetryable = "domain does not exist"
+	// DefaultRPS is the default RPS
+	DefaultRPS = 50
+	// DefaultPageSize is the default page size
+	DefaultPageSize = 1000
 )
