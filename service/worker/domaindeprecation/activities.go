@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"github.com/uber/cadence/common/log/tag"
 	"github.com/uber/cadence/common/types"
+	"go.uber.org/cadence"
 )
 
 const defaultPageSize = 1000
@@ -42,8 +43,7 @@ func (w *domainDeprecator) DisableArchivalActivity(ctx context.Context, params D
 	if err != nil {
 		var entityNotExistsError *types.EntityNotExistsError
 		if errors.As(err, &entityNotExistsError) {
-			fmt.Println("great")
-			return types.EntityNotExistsError{Message: ErrDomainDoesNotExistNonRetryable}
+			return cadence.NewCustomError(ErrDomainDoesNotExistNonRetryable)
 		}
 		return fmt.Errorf("failed to describe domain: %v", err)
 	}
