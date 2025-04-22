@@ -36,7 +36,7 @@ type ListAndTerminateActivityParams struct {
 
 // ListAndTerminateActivityResult contains the result of ListAndTerminateActivity
 type ListAndTerminateActivityResult struct {
-	NextPageToken  []byte
-	ProcessedCount int
-	ErrorCount     int
+	NextPageToken     []byte
+	TerminatedWFCount int
+	ErrorCount        int
 }

@@ -55,7 +55,7 @@ var (
 		RetryPolicy:            &retryPolicy,
 	}
 
-	// Longer timeout for list and terminate activity since it needs to process potentially millions of workflows
+	// Longer timeout for list and terminate activity since it needs to process potentially large number of workflows
 	listAndTerminateActivityOptions = workflow.ActivityOptions{
 		ScheduleToStartTimeout: 24 * time.Hour,
 		StartToCloseTimeout:    24 * time.Hour,
@@ -115,9 +115,9 @@ func (w *domainDeprecator) DomainDeprecationWorkflow(ctx workflow.Context, domai
 			break
 		}
 
-		logger.Info("Processed batch of workflows",
+		logger.Info("Terminated batch of workflows",
 			zap.String("domain", domainName),
-			zap.Int("processedCount", result.ProcessedCount),
+			zap.Int("terminatedWFCount", result.TerminatedWFCount),
 			zap.Int("errorCount", result.ErrorCount))
 	}
 

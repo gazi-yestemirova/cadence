@@ -92,9 +92,9 @@ func (s *domainDeprecationWorkflowTestSuite) TestWorkflow_Success() {
 		PageSize:      100,
 		NextPageToken: nil,
 	}).Return(ListAndTerminateActivityResult{
-		NextPageToken:  nil,
-		ProcessedCount: 100,
-		ErrorCount:     0,
+		NextPageToken:     nil,
+		TerminatedWFCount: 100,
+		ErrorCount:        0,
 	}, nil)
 	s.workflowEnv.ExecuteWorkflow(domainDeprecationWorkflowTypeName, testDomain)
 	s.True(s.workflowEnv.IsWorkflowCompleted())

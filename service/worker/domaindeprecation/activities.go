@@ -109,9 +109,8 @@ func (w *domainDeprecator) ListAndTerminateActivity(ctx context.Context, params 
 		return result, err
 	}
 
-	// Process each workflow in the batch
+	// Terminate each workflow in the batch
 	for i, executionInfo := range resp.Executions {
-		// Record heartbeat with progress
 		activity.RecordHeartbeat(ctx, i)
 
 		err := client.TerminateWorkflowExecution(ctx, &types.TerminateWorkflowExecutionRequest{
@@ -127,7 +126,7 @@ func (w *domainDeprecator) ListAndTerminateActivity(ctx context.Context, params 
 			// EntityNotExistsError means wf is not running or deleted
 			var entityNotExistsError *types.EntityNotExistsError
 			if errors.As(err, &entityNotExistsError) {
-				result.ProcessedCount++
+				result.TerminatedWFCount++
 				continue
 			}
 			result.ErrorCount++
@@ -138,7 +137,7 @@ func (w *domainDeprecator) ListAndTerminateActivity(ctx context.Context, params 
 			continue
 		}
 
-		result.ProcessedCount++
+		result.TerminatedWFCount++
 		err = rateLimiter.Wait(ctx)
 		if err != nil {
 			return result, err
