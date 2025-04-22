@@ -32,10 +32,9 @@ const (
 	domainDeprecationWorkflowTypeName = "domain-deprecation-workflow"
 	domainDeprecationTaskListName     = "domain-deprecation-tasklist"
 
-	disableArchivalActivity    = "disableArchival"
-	deprecateDomainActivity    = "deprecateDomain"
-	listWorkflowsActivity      = "listWorkflowsActivity"
-	terminateWorkflowsActivity = "terminateWorkflowsActivity"
+	disableArchivalActivity  = "disableArchival"
+	deprecateDomainActivity  = "deprecateDomain"
+	listAndTerminateActivity = "listAndTerminateActivity"
 )
 
 var (
@@ -43,7 +42,7 @@ var (
 		InitialInterval:    10 * time.Second,
 		BackoffCoefficient: 1.7,
 		MaximumInterval:    5 * time.Minute,
-		ExpirationInterval: 10 * time.Minute,
+		ExpirationInterval: 24 * time.Hour,
 		NonRetriableErrorReasons: []string{
 			ErrDomainDoesNotExistNonRetryable,
 		},
@@ -52,6 +51,14 @@ var (
 	activityOptions = workflow.ActivityOptions{
 		ScheduleToStartTimeout: 5 * time.Minute,
 		StartToCloseTimeout:    5 * time.Minute,
+		HeartbeatTimeout:       5 * time.Minute,
+		RetryPolicy:            &retryPolicy,
+	}
+
+	// Longer timeout for list and terminate activity since it needs to process potentially millions of workflows
+	listAndTerminateActivityOptions = workflow.ActivityOptions{
+		ScheduleToStartTimeout: 24 * time.Hour,
+		StartToCloseTimeout:    24 * time.Hour,
 		HeartbeatTimeout:       5 * time.Minute,
 		RetryPolicy:            &retryPolicy,
 	}
@@ -86,30 +93,32 @@ func (w *domainDeprecator) DomainDeprecationWorkflow(ctx workflow.Context, domai
 		return err
 	}
 
-	// Step 3: List open workflows of the domain
-	var workflowDetails []WorkflowDetails
-	err = workflow.ExecuteActivity(
-		workflow.WithActivityOptions(ctx, activityOptions),
-		w.ListOpenWorkflowsActivity,
-		domainParams,
-	).Get(ctx, &workflowDetails)
-	if err != nil {
-		return err
-	}
-
-	// Step 4: Terminate open workflows of the domain
-	if len(workflowDetails) > 0 {
+	// Step 3: List and terminate workflows in batches
+	var nextPageToken []byte
+	for {
+		var result ListAndTerminateActivityResult
 		err = workflow.ExecuteActivity(
-			workflow.WithActivityOptions(ctx, activityOptions),
-			w.TerminateWorkflowsActivity,
-			TerminateWorkflowsActivityParams{
-				DomainName:      domainName,
-				WorkflowDetails: workflowDetails,
+			workflow.WithActivityOptions(ctx, listAndTerminateActivityOptions),
+			w.ListAndTerminateActivity,
+			ListAndTerminateActivityParams{
+				DomainName:    domainName,
+				PageSize:      DefaultPageSize,
+				NextPageToken: nextPageToken,
 			},
-		).Get(ctx, nil)
-	}
-	if err != nil {
-		return err
+		).Get(ctx, &result)
+		if err != nil {
+			return err
+		}
+
+		nextPageToken = result.NextPageToken
+		if nextPageToken == nil {
+			break
+		}
+
+		logger.Info("Processed batch of workflows",
+			zap.String("domain", domainName),
+			zap.Int("processedCount", result.ProcessedCount),
+			zap.Int("errorCount", result.ErrorCount))
 	}
 
 	logger.Info("Domain deprecation workflow completed successfully", zap.String("domain", domainName))

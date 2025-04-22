@@ -22,25 +22,21 @@
 
 package domaindeprecation
 
-// DomainActivityParams contains the domain name parameter used by domain-related activities.
+// DomainActivityParams contains parameters for domain activities
 type DomainActivityParams struct {
-	DomainName string `json:"domain_name"`
+	DomainName string
 }
 
-type ListWorkflowExecutionParams struct {
-	openWorkflowsQuery string `json:"open_workflows_query"`
-	nextPageToken      []byte `json:"next_page_token"`
-	pageSize           int32  `json:"page_size"`
+// ListAndTerminateActivityParams contains parameters for ListAndTerminateActivity
+type ListAndTerminateActivityParams struct {
+	DomainName    string
+	PageSize      int32
+	NextPageToken []byte
 }
 
-// WorkflowDetails contains the workflow ID and run ID that identify a workflow execution.
-type WorkflowDetails struct {
-	WorkflowID string `json:"workflow_id"`
-	RunID      string `json:"run_id"`
-}
-
-// TerminateWorkflowsActivityParams contains the domain name and list of workflows to terminate.
-type TerminateWorkflowsActivityParams struct {
-	DomainName      string            `json:"domain_name"`
-	WorkflowDetails []WorkflowDetails `json:"workflow_details"`
+// ListAndTerminateActivityResult contains the result of ListAndTerminateActivity
+type ListAndTerminateActivityResult struct {
+	NextPageToken  []byte
+	ProcessedCount int
+	ErrorCount     int
 }

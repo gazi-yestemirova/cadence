@@ -223,15 +223,42 @@ func TestListOpenWorkflowsActivity(t *testing.T) {
 			setupMocks: func() {
 				mockClient.EXPECT().ListWorkflowExecutions(gomock.Any(), gomock.Any()).Return(
 					&types.ListWorkflowExecutionsResponse{
-						Executions: []*types.WorkflowExecutionInfo{},
+						Executions: []*types.WorkflowExecutionInfo{
+							{
+								Execution: &types.WorkflowExecution{
+									WorkflowID: "test-wid",
+									RunID:      "test-runId",
+								},
+							},
+						},
 					}, nil)
+				mockClient.EXPECT().TerminateWorkflowExecution(gomock.Any(), gomock.Any()).Return()
 			},
 			expectedError: nil,
 		},
 		{
-			name: "Error",
+			name: "Error - List Workflows",
 			setupMocks: func() {
 				mockClient.EXPECT().ListWorkflowExecutions(gomock.Any(), gomock.Any()).Return(
+					nil, assert.AnError)
+			},
+			expectedError: assert.AnError,
+		},
+		{
+			name: "Error - Terminate Workflows",
+			setupMocks: func() {
+				mockClient.EXPECT().ListWorkflowExecutions(gomock.Any(), gomock.Any()).Return(
+					&types.ListWorkflowExecutionsResponse{
+						Executions: []*types.WorkflowExecutionInfo{
+							{
+								Execution: &types.WorkflowExecution{
+									WorkflowID: "test-wid",
+									RunID:      "test-runId",
+								},
+							},
+						},
+					}, nil)
+				mockClient.EXPECT().TerminateWorkflowExecution(gomock.Any(), gomock.Any()).Return(
 					nil, assert.AnError)
 			},
 			expectedError: assert.AnError,
@@ -241,8 +268,10 @@ func TestListOpenWorkflowsActivity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMocks()
-			_, err := deprecator.ListOpenWorkflowsActivity(context.Background(), DomainActivityParams{
-				DomainName: testDomain,
+			_, err := deprecator.ListAndTerminateActivity(context.Background(), ListAndTerminateActivityParams{
+				DomainName:    testDomain,
+				PageSize:      DefaultPageSize,
+				NextPageToken: nil,
 			})
 			if tt.expectedError != nil {
 				assert.Error(t, err)

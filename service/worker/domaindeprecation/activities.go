@@ -26,6 +26,7 @@ import (
 	"fmt"
 
 	"go.uber.org/cadence"
+	"go.uber.org/cadence/activity"
 	"golang.org/x/time/rate"
 
 	"github.com/uber/cadence/common/log/tag"
@@ -91,62 +92,33 @@ func (w *domainDeprecator) DeprecateDomainActivity(ctx context.Context, params D
 	return nil
 }
 
-func (w *domainDeprecator) ListOpenWorkflowsActivity(ctx context.Context, domainParams DomainActivityParams) ([]WorkflowDetails, error) {
+// ListAndTerminateActivity lists and terminates workflows in batches
+func (w *domainDeprecator) ListAndTerminateActivity(ctx context.Context, params ListAndTerminateActivityParams) (ListAndTerminateActivityResult, error) {
 	client := w.clientBean.GetFrontendClient()
 	rateLimiter := rate.NewLimiter(rate.Limit(DefaultRPS), DefaultRPS)
+	result := ListAndTerminateActivityResult{}
 
-	listParams := ListWorkflowExecutionParams{
-		openWorkflowsQuery: "CloseTime = missing",
-		nextPageToken:      nil,
-		pageSize:           DefaultPageSize,
+	// List workflows
+	resp, err := client.ListWorkflowExecutions(ctx, &types.ListWorkflowExecutionsRequest{
+		Domain:        params.DomainName,
+		PageSize:      params.PageSize,
+		NextPageToken: params.NextPageToken,
+		Query:         "CloseTime = missing",
+	})
+	if err != nil {
+		return result, err
 	}
-	workflowDetails := make([]WorkflowDetails, 0)
 
-	for {
-		resp, err := client.ListWorkflowExecutions(ctx, &types.ListWorkflowExecutionsRequest{
-			Domain:        domainParams.DomainName,
-			PageSize:      listParams.pageSize,
-			NextPageToken: listParams.nextPageToken,
-			Query:         listParams.openWorkflowsQuery,
-		})
-		if err != nil {
-			return nil, err
-		}
+	// Process each workflow in the batch
+	for i, executionInfo := range resp.Executions {
+		// Record heartbeat with progress
+		activity.RecordHeartbeat(ctx, i)
 
-		openWorkflowsCount := len(resp.Executions)
-		if openWorkflowsCount <= 0 {
-			break
-		}
-
-		for _, executionInfo := range resp.Executions {
-			workflowDetails = append(workflowDetails, WorkflowDetails{
-				WorkflowID: executionInfo.Execution.WorkflowID,
-				RunID:      executionInfo.Execution.RunID,
-			})
-		}
-
-		listParams.nextPageToken = resp.NextPageToken
-		if listParams.nextPageToken == nil {
-			break
-		}
-		err = rateLimiter.Wait(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return workflowDetails, nil
-}
-
-func (w *domainDeprecator) TerminateWorkflowsActivity(ctx context.Context, params TerminateWorkflowsActivityParams) error {
-	client := w.clientBean.GetFrontendClient()
-	rateLimiter := rate.NewLimiter(rate.Limit(DefaultRPS), DefaultRPS)
-
-	for _, workflow := range params.WorkflowDetails {
 		err := client.TerminateWorkflowExecution(ctx, &types.TerminateWorkflowExecutionRequest{
 			Domain: params.DomainName,
 			WorkflowExecution: &types.WorkflowExecution{
-				WorkflowID: workflow.WorkflowID,
-				RunID:      workflow.RunID,
+				WorkflowID: executionInfo.Execution.WorkflowID,
+				RunID:      executionInfo.Execution.RunID,
 			},
 			Reason: "domain is deprecated",
 		})
@@ -155,15 +127,24 @@ func (w *domainDeprecator) TerminateWorkflowsActivity(ctx context.Context, param
 			// EntityNotExistsError means wf is not running or deleted
 			var entityNotExistsError *types.EntityNotExistsError
 			if errors.As(err, &entityNotExistsError) {
+				result.ProcessedCount++
 				continue
 			}
-			return err
+			result.ErrorCount++
+			w.logger.Error("Failed to terminate workflow",
+				tag.WorkflowID(executionInfo.Execution.WorkflowID),
+				tag.WorkflowRunID(executionInfo.Execution.RunID),
+				tag.Error(err))
+			continue
 		}
 
+		result.ProcessedCount++
 		err = rateLimiter.Wait(ctx)
 		if err != nil {
-			return err
+			return result, err
 		}
 	}
-	return nil
+
+	result.NextPageToken = resp.NextPageToken
+	return result, nil
 }

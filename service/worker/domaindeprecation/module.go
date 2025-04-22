@@ -92,8 +92,7 @@ func (w *domainDeprecator) Start() error {
 	newWorker.RegisterWorkflowWithOptions(w.DomainDeprecationWorkflow, workflow.RegisterOptions{Name: domainDeprecationWorkflowTypeName})
 	newWorker.RegisterActivityWithOptions(w.DisableArchivalActivity, activity.RegisterOptions{Name: disableArchivalActivity, EnableAutoHeartbeat: true})
 	newWorker.RegisterActivityWithOptions(w.DeprecateDomainActivity, activity.RegisterOptions{Name: deprecateDomainActivity, EnableAutoHeartbeat: true})
-	newWorker.RegisterActivityWithOptions(w.ListOpenWorkflowsActivity, activity.RegisterOptions{Name: listWorkflowsActivity, EnableAutoHeartbeat: true})
-	newWorker.RegisterActivityWithOptions(w.TerminateWorkflowsActivity, activity.RegisterOptions{Name: terminateWorkflowsActivity, EnableAutoHeartbeat: true})
+	newWorker.RegisterActivityWithOptions(w.ListAndTerminateActivity, activity.RegisterOptions{Name: listAndTerminateActivity})
 	w.worker = newWorker
 	return newWorker.Start()
 }
