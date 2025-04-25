@@ -21,6 +21,8 @@
 package domaindeprecation
 
 import (
+	"errors"
+	"github.com/uber/cadence/service/worker/batcher"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -37,18 +39,10 @@ import (
 )
 
 var (
-	testDomain    = "test-domain"
-	openWorkflows = []WorkflowDetails{
-		{
-			WorkflowID: "workflow1",
-			RunID:      "test-runID1",
-		},
-		{
-			WorkflowID: "workflow2",
-			RunID:      "test-runID2",
-		},
+	testDomain            = "test-domain"
+	defaultActivityParams = DomainActivityParams{
+		DomainName: testDomain,
 	}
-	mockErr = "error"
 )
 
 type domainDeprecationWorkflowTestSuite struct {
@@ -71,10 +65,11 @@ func (s *domainDeprecationWorkflowTestSuite) SetupTest() {
 		cfg: Config{
 			AdminOperationToken: dynamicproperties.GetStringPropertyFn(""),
 		},
-		svcClient:  publicClient,
-		clientBean: mockResource.ClientBean,
-		tally:      tally.NoopScope,
-		logger:     mockResource.GetLogger(),
+		svcClient:     publicClient,
+		clientBean:    mockResource.ClientBean,
+		metricsClient: metrics.NewNoopMetricsClient(),
+		tally:         tally.NoopScope,
+		logger:        mockResource.GetLogger(),
 	}
 
 	s.T().Cleanup(func() {
@@ -91,49 +86,46 @@ func (s *domainDeprecationWorkflowTestSuite) TearDownTest() {
 }
 
 func (s *domainDeprecationWorkflowTestSuite) TestWorkflow_Success() {
-	s.workflowEnv.OnActivity(disableArchivalActivity, mock.Anything, testDomain).Return(nil)
-	s.workflowEnv.OnActivity(deprecateDomainActivity, mock.Anything, testDomain).Return(nil)
-	s.workflowEnv.OnActivity(listWorkflowsActivity, mock.Anything, testDomain).Return(openWorkflows)
-	s.workflowEnv.OnActivity(terminateWorkflowsActivity, mock.Anything, testDomain).Return(nil)
+	s.workflowEnv.OnActivity(disableArchivalActivity, mock.Anything, defaultActivityParams).Return(nil)
+	s.workflowEnv.OnActivity(deprecateDomainActivity, mock.Anything, defaultActivityParams).Return(nil)
+	s.workflowEnv.OnWorkflow(batcher.BatchWorkflow, mock.Anything, mock.Anything).Return(
+		batcher.HeartBeatDetails{
+			SuccessCount: 10,
+			ErrorCount:   0,
+		}, nil).Once()
 	s.workflowEnv.ExecuteWorkflow(domainDeprecationWorkflowTypeName, testDomain)
 	s.True(s.workflowEnv.IsWorkflowCompleted())
 	s.NoError(s.workflowEnv.GetWorkflowError())
 }
 
 func (s *domainDeprecationWorkflowTestSuite) TestWorkflow_Disable_Archival_Error() {
-	s.workflowEnv.OnActivity(disableArchivalActivity, mock.Anything, testDomain).Return(mockErr)
+	mockErr := errors.New("error")
+	s.workflowEnv.OnActivity(disableArchivalActivity, mock.Anything, defaultActivityParams).Return(mockErr)
 	s.workflowEnv.ExecuteWorkflow(domainDeprecationWorkflowTypeName, testDomain)
 	s.True(s.workflowEnv.IsWorkflowCompleted())
 	s.Error(s.workflowEnv.GetWorkflowError())
-	s.Contains(s.workflowEnv.GetWorkflowError().Error(), mockErr)
+	s.ErrorContains(s.workflowEnv.GetWorkflowError(), mockErr.Error())
 }
 
 func (s *domainDeprecationWorkflowTestSuite) TestWorkflow_Deprecate_Domain_Error() {
-	s.workflowEnv.OnActivity(disableArchivalActivity, mock.Anything, testDomain).Return(nil)
-	s.workflowEnv.OnActivity(deprecateDomainActivity, mock.Anything, testDomain).Return(mockErr)
+	mockErr := errors.New("error")
+	s.workflowEnv.OnActivity(disableArchivalActivity, mock.Anything, defaultActivityParams).Return(nil)
+	s.workflowEnv.OnActivity(deprecateDomainActivity, mock.Anything, defaultActivityParams).Return(mockErr)
 	s.workflowEnv.ExecuteWorkflow(domainDeprecationWorkflowTypeName, testDomain)
 	s.True(s.workflowEnv.IsWorkflowCompleted())
 	s.Error(s.workflowEnv.GetWorkflowError())
-	s.Contains(s.workflowEnv.GetWorkflowError().Error(), mockErr)
+	s.ErrorContains(s.workflowEnv.GetWorkflowError(), mockErr.Error())
 }
 
-func (s *domainDeprecationWorkflowTestSuite) TestWorkflow_List_Workflows_Error() {
-	s.workflowEnv.OnActivity(disableArchivalActivity, mock.Anything, testDomain).Return(nil)
-	s.workflowEnv.OnActivity(deprecateDomainActivity, mock.Anything, testDomain).Return(nil)
-	s.workflowEnv.OnActivity(listWorkflowsActivity, mock.Anything, testDomain).Return(mockErr)
-	s.workflowEnv.ExecuteWorkflow(domainDeprecationWorkflowTypeName, testDomain)
-	s.True(s.workflowEnv.IsWorkflowCompleted())
-	s.Error(s.workflowEnv.GetWorkflowError())
-	s.Contains(s.workflowEnv.GetWorkflowError().Error(), mockErr)
-}
+func (s *domainDeprecationWorkflowTestSuite) TestWorkflow_BatchTerminate_ChildWorkflowError() {
+	mockErr := errors.New("batch workflow failed")
+	s.workflowEnv.OnActivity(disableArchivalActivity, mock.Anything, defaultActivityParams).Return(nil)
+	s.workflowEnv.OnActivity(deprecateDomainActivity, mock.Anything, defaultActivityParams).Return(nil)
+	s.workflowEnv.OnWorkflow(batcher.BatchWorkflow, mock.Anything, mock.Anything).Return(
+		batcher.HeartBeatDetails{}, mockErr)
 
-func (s *domainDeprecationWorkflowTestSuite) TestWorkflow_Terminate_Workflows_Error() {
-	s.workflowEnv.OnActivity(disableArchivalActivity, mock.Anything, testDomain).Return(nil)
-	s.workflowEnv.OnActivity(deprecateDomainActivity, mock.Anything, testDomain).Return(nil)
-	s.workflowEnv.OnActivity(listWorkflowsActivity, mock.Anything, testDomain).Return(openWorkflows)
-	s.workflowEnv.OnActivity(terminateWorkflowsActivity, mock.Anything, testDomain).Return(mockErr)
 	s.workflowEnv.ExecuteWorkflow(domainDeprecationWorkflowTypeName, testDomain)
 	s.True(s.workflowEnv.IsWorkflowCompleted())
 	s.Error(s.workflowEnv.GetWorkflowError())
-	s.Contains(s.workflowEnv.GetWorkflowError().Error(), mockErr)
+	s.ErrorContains(s.workflowEnv.GetWorkflowError(), mockErr.Error())
 }

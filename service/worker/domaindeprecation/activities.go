@@ -24,11 +24,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"go.uber.org/cadence"
+
 	"github.com/uber/cadence/common/log/tag"
 	"github.com/uber/cadence/common/types"
 )
-
-const defaultPageSize = 1000
 
 // DisableArchivalActivity disables archival for the domain
 func (w *domainDeprecator) DisableArchivalActivity(ctx context.Context, params DomainActivityParams) error {
@@ -42,8 +43,7 @@ func (w *domainDeprecator) DisableArchivalActivity(ctx context.Context, params D
 	if err != nil {
 		var entityNotExistsError *types.EntityNotExistsError
 		if errors.As(err, &entityNotExistsError) {
-			fmt.Println("great")
-			return types.EntityNotExistsError{Message: ErrDomainDoesNotExistNonRetryable}
+			return cadence.NewCustomError(ErrDomainDoesNotExistNonRetryable)
 		}
 		return fmt.Errorf("failed to describe domain: %v", err)
 	}
@@ -87,70 +87,5 @@ func (w *domainDeprecator) DeprecateDomainActivity(ctx context.Context, params D
 		return fmt.Errorf("failed to deprecate domain: %v", err)
 	}
 
-	return nil
-}
-
-func (w *domainDeprecator) ListOpenWorkflowsActivity(ctx context.Context, domainParams DomainActivityParams) ([]WorkflowDetails, error) {
-	client := w.clientBean.GetFrontendClient()
-	listParams := ListWorkflowExecutionParams{
-		openWorkflowsQuery: "CloseTime = missing",
-		nextPageToken:      nil,
-		pageSize:           defaultPageSize,
-	}
-	workflowDetails := make([]WorkflowDetails, 0)
-
-	for {
-		resp, err := client.ListWorkflowExecutions(ctx, &types.ListWorkflowExecutionsRequest{
-			Domain:        domainParams.DomainName,
-			PageSize:      listParams.pageSize,
-			NextPageToken: listParams.nextPageToken,
-			Query:         listParams.openWorkflowsQuery,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		openWorkflowsCount := len(resp.Executions)
-		if openWorkflowsCount <= 0 {
-			break
-		}
-
-		for _, executionInfo := range resp.Executions {
-			workflowDetails = append(workflowDetails, WorkflowDetails{
-				WorkflowID: executionInfo.Execution.WorkflowID,
-				RunID:      executionInfo.Execution.RunID,
-			})
-		}
-
-		listParams.nextPageToken = resp.NextPageToken
-		if listParams.nextPageToken == nil {
-			break
-		}
-	}
-	return workflowDetails, nil
-}
-
-func (w *domainDeprecator) TerminateWorkflowsActivity(ctx context.Context, params TerminateWorkflowsActivityParams) error {
-	client := w.clientBean.GetFrontendClient()
-
-	for _, workflow := range params.WorkflowDetails {
-		err := client.TerminateWorkflowExecution(ctx, &types.TerminateWorkflowExecutionRequest{
-			Domain: params.DomainName,
-			WorkflowExecution: &types.WorkflowExecution{
-				WorkflowID: workflow.WorkflowID,
-				RunID:      workflow.RunID,
-			},
-			Reason: "domain is deprecated",
-		})
-
-		if err != nil {
-			// EntityNotExistsError means wf is not running or deleted
-			var entityNotExistsError *types.EntityNotExistsError
-			if errors.As(err, &entityNotExistsError) {
-				continue
-			}
-			return err
-		}
-	}
 	return nil
 }
