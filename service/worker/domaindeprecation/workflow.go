@@ -39,7 +39,6 @@ const (
 
 	disableArchivalActivity = "disableArchival"
 	deprecateDomainActivity = "deprecateDomain"
-	listWorkflowsActivity   = "listWorkflowsActivity"
 
 	workflowStartToCloseTimeout     = time.Hour * 24 * 30
 	workflowTaskStartToCloseTimeout = 5 * time.Minute

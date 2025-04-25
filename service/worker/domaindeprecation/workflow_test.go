@@ -22,7 +22,6 @@ package domaindeprecation
 
 import (
 	"errors"
-	"github.com/uber/cadence/service/worker/batcher"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -36,6 +35,7 @@ import (
 	"github.com/uber/cadence/common/dynamicconfig/dynamicproperties"
 	"github.com/uber/cadence/common/metrics"
 	"github.com/uber/cadence/common/resource"
+	"github.com/uber/cadence/service/worker/batcher"
 )
 
 var (
