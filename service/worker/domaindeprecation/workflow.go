@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/pborman/uuid"
 	"go.uber.org/cadence"
 	"go.uber.org/cadence/workflow"
 	"go.uber.org/zap"
@@ -114,8 +115,9 @@ func (w *domainDeprecator) DomainDeprecationWorkflow(ctx workflow.Context, domai
 		},
 	}
 
+	workflowID := uuid.New()
 	childWorkflowOptions := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
-		WorkflowID:                   fmt.Sprintf("%s-%s", domainDeprecationBatchPrefix, domainName),
+		WorkflowID:                   fmt.Sprintf("%s-%s-%s", domainDeprecationBatchPrefix, domainName, workflowID),
 		ExecutionStartToCloseTimeout: workflowStartToCloseTimeout,
 		TaskStartToCloseTimeout:      workflowTaskStartToCloseTimeout,
 	})
