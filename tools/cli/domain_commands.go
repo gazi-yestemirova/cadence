@@ -44,6 +44,11 @@ import (
 	"github.com/uber/cadence/tools/common/flag"
 )
 
+const (
+	decisionTimeoutInSeconds    = 5 * 60
+	workflowStartToCloseTimeout = 24 * 30 * 60 * 60 // 30 days
+)
+
 var (
 	gracefulFailoverType = "grace"
 )
@@ -340,8 +345,8 @@ func (d *domainCLIImpl) DeprecateDomain(c *cli.Context) error {
 		TaskList: &types.TaskList{
 			Name: domaindeprecation.DomainDeprecationTaskListName,
 		},
-		ExecutionStartToCloseTimeoutSeconds: common.Int32Ptr(int32(24 * 30 * 60 * 60)), // 30 days
-		TaskStartToCloseTimeoutSeconds:      common.Int32Ptr(5 * 60),                   // 5 minutes
+		ExecutionStartToCloseTimeoutSeconds: common.Int32Ptr(int32(workflowStartToCloseTimeout)),
+		TaskStartToCloseTimeoutSeconds:      common.Int32Ptr(decisionTimeoutInSeconds),
 		RequestID:                           uuid.New(),
 		Input:                               input,
 	}
