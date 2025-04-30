@@ -51,6 +51,7 @@ func TestDisableArchivalActivity(t *testing.T) {
 	}
 
 	testDomain := "test-domain"
+	securityToken := "token"
 	disabled := types.ArchivalStatusDisabled
 	enabled := types.ArchivalStatusEnabled
 
@@ -129,8 +130,9 @@ func TestDisableArchivalActivity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMocks()
-			err := deprecator.DisableArchivalActivity(context.Background(), DomainActivityParams{
-				DomainName: testDomain,
+			err := deprecator.DisableArchivalActivity(context.Background(), DomainDeprecationParams{
+				DomainName:    testDomain,
+				SecurityToken: securityToken,
 			})
 			if tt.expectedError != nil {
 				assert.Error(t, err)
@@ -158,6 +160,7 @@ func TestDeprecateDomainActivity(t *testing.T) {
 	}
 
 	testDomain := "test-domain"
+	securityToken := "token"
 
 	tests := []struct {
 		name          string
@@ -183,8 +186,9 @@ func TestDeprecateDomainActivity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMocks()
-			err := deprecator.DeprecateDomainActivity(context.Background(), DomainActivityParams{
-				DomainName: testDomain,
+			err := deprecator.DeprecateDomainActivity(context.Background(), DomainDeprecationParams{
+				DomainName:    testDomain,
+				SecurityToken: securityToken,
 			})
 			if tt.expectedError != nil {
 				assert.Error(t, err)

@@ -351,7 +351,7 @@ func (d *domainCLIImpl) DeprecateDomain(c *cli.Context) error {
 		return commoncli.Problem("Failed to start domain deprecation workflow", err)
 	}
 
-	fmt.Printf("Domain deprecation workflow started. Workflow ID: %s, Run ID: %s\n", startRequest.WorkflowID, resp.GetRunID())
+	fmt.Printf("Domain deprecation is in progress. Workflow ID: %s, Run ID: %s\n", startRequest.WorkflowID, resp.GetRunID())
 	return nil
 }
 
