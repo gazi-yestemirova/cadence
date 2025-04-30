@@ -47,6 +47,9 @@ const (
 
 	// MaxBatchWorkflowAttempts is the maximum number of attempts to terminate open workflows
 	MaxBatchWorkflowAttempts = 3
+
+	// VisibilityRefreshWaitTime is the time to wait for visibility storage to refresh after workflow termination
+	VisibilityRefreshWaitTime = 3 * time.Minute
 )
 
 var (
@@ -137,6 +140,9 @@ func (w *domainDeprecator) DomainDeprecationWorkflow(ctx workflow.Context, domai
 		if err != nil {
 			return fmt.Errorf("batch workflow failed on attempt %d: %v", attempt, err)
 		}
+
+		// Wait for visibility storage to refresh
+		workflow.Sleep(ctx, VisibilityRefreshWaitTime)
 
 		// Check if there are still open workflows
 		var hasOpenWorkflows bool
