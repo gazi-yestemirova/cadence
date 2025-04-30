@@ -34,8 +34,8 @@ import (
 )
 
 const (
-	domainDeprecationWorkflowTypeName = "domain-deprecation-workflow"
-	domainDeprecationTaskListName     = "domain-deprecation-tasklist"
+	DomainDeprecationWorkflowTypeName = "domain-deprecation-workflow"
+	DomainDeprecationTaskListName     = "domain-deprecation-tasklist"
 	domainDeprecationBatchPrefix      = "domain-deprecation-batch"
 
 	disableArchivalActivity = "disableArchival"
@@ -66,19 +66,15 @@ var (
 )
 
 // DomainDeprecationWorkflow is the workflow that handles domain deprecation process
-func (w *domainDeprecator) DomainDeprecationWorkflow(ctx workflow.Context, domainName string) error {
+func (w *domainDeprecator) DomainDeprecationWorkflow(ctx workflow.Context, params DomainDeprecationParams) error {
 	logger := workflow.GetLogger(ctx)
-	logger.Info("Starting domain deprecation workflow", zap.String("domain", domainName))
-
-	domainParams := DomainActivityParams{
-		DomainName: domainName,
-	}
+	logger.Info("Starting domain deprecation workflow", zap.String("domain", params.DomainName))
 
 	// Step 1: Activity disables archival
 	err := workflow.ExecuteActivity(
 		workflow.WithActivityOptions(ctx, activityOptions),
 		w.DisableArchivalActivity,
-		domainParams,
+		params,
 	).Get(ctx, nil)
 	if err != nil {
 		return err
@@ -88,7 +84,7 @@ func (w *domainDeprecator) DomainDeprecationWorkflow(ctx workflow.Context, domai
 	err = workflow.ExecuteActivity(
 		workflow.WithActivityOptions(ctx, activityOptions),
 		w.DeprecateDomainActivity,
-		domainParams,
+		params,
 	).Get(ctx, nil)
 	if err != nil {
 		return err
@@ -96,7 +92,7 @@ func (w *domainDeprecator) DomainDeprecationWorkflow(ctx workflow.Context, domai
 
 	// Step 3: Start child batch workflow to terminate open workflows of a domain
 	batchParams := batcher.BatchParams{
-		DomainName: domainName,
+		DomainName: params.DomainName,
 		Query:      "CloseTime = missing",
 		Reason:     "domain is deprecated",
 		BatchType:  batcher.BatchTypeTerminate,
@@ -117,7 +113,7 @@ func (w *domainDeprecator) DomainDeprecationWorkflow(ctx workflow.Context, domai
 
 	workflowID := uuid.New()
 	childWorkflowOptions := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
-		WorkflowID:                   fmt.Sprintf("%s-%s-%s", domainDeprecationBatchPrefix, domainName, workflowID),
+		WorkflowID:                   fmt.Sprintf("%s-%s-%s", domainDeprecationBatchPrefix, params.DomainName, workflowID),
 		ExecutionStartToCloseTimeout: workflowStartToCloseTimeout,
 		TaskStartToCloseTimeout:      workflowTaskStartToCloseTimeout,
 	})
@@ -128,6 +124,6 @@ func (w *domainDeprecator) DomainDeprecationWorkflow(ctx workflow.Context, domai
 		return fmt.Errorf("batch workflow failed: %v", err)
 	}
 
-	logger.Info("Domain deprecation workflow completed successfully", zap.String("domain", domainName))
+	logger.Info("Domain deprecation workflow completed successfully", zap.String("domain", params.DomainName))
 	return nil
 }

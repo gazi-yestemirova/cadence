@@ -32,7 +32,7 @@ import (
 )
 
 // DisableArchivalActivity disables archival for the domain
-func (w *domainDeprecator) DisableArchivalActivity(ctx context.Context, params DomainActivityParams) error {
+func (w *domainDeprecator) DisableArchivalActivity(ctx context.Context, params DomainDeprecationParams) error {
 	client := w.clientBean.GetFrontendClient()
 	disabled := types.ArchivalStatusDisabled
 
@@ -59,7 +59,7 @@ func (w *domainDeprecator) DisableArchivalActivity(ctx context.Context, params D
 		Name:                     params.DomainName,
 		HistoryArchivalStatus:    &disabled,
 		VisibilityArchivalStatus: &disabled,
-		SecurityToken:            w.cfg.AdminOperationToken(),
+		SecurityToken:            params.SecurityToken,
 	}
 	updateResp, err := client.UpdateDomain(ctx, updateRequest)
 	if err != nil {
@@ -76,12 +76,12 @@ func (w *domainDeprecator) DisableArchivalActivity(ctx context.Context, params D
 }
 
 // DeprecateDomainActivity deprecates the domain
-func (w *domainDeprecator) DeprecateDomainActivity(ctx context.Context, params DomainActivityParams) error {
+func (w *domainDeprecator) DeprecateDomainActivity(ctx context.Context, params DomainDeprecationParams) error {
 	client := w.clientBean.GetFrontendClient()
 
 	err := client.DeprecateDomain(ctx, &types.DeprecateDomainRequest{
 		Name:          params.DomainName,
-		SecurityToken: w.cfg.AdminOperationToken(),
+		SecurityToken: params.SecurityToken,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to deprecate domain: %v", err)

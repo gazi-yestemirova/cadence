@@ -22,6 +22,11 @@
 
 package domaindeprecation
 
+type DomainDeprecationParams struct {
+	DomainName    string `json:"domain_name"`
+	SecurityToken string `json:"security_token"`
+}
+
 // DomainActivityParams contains the domain name parameter used by domain-related activities.
 type DomainActivityParams struct {
 	DomainName string `json:"domain_name"`

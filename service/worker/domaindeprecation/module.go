@@ -107,8 +107,8 @@ func (w *domainDeprecator) Start() error {
 		MaxConcurrentActivityTaskPollers: 10,
 		MaxConcurrentDecisionTaskPollers: 10,
 	}
-	newWorker := worker.New(w.svcClient, constants.SystemLocalDomainName, domainDeprecationTaskListName, workerOpts)
-	newWorker.RegisterWorkflowWithOptions(w.DomainDeprecationWorkflow, workflow.RegisterOptions{Name: domainDeprecationWorkflowTypeName})
+	newWorker := worker.New(w.svcClient, constants.SystemLocalDomainName, DomainDeprecationTaskListName, workerOpts)
+	newWorker.RegisterWorkflowWithOptions(w.DomainDeprecationWorkflow, workflow.RegisterOptions{Name: DomainDeprecationWorkflowTypeName})
 	newWorker.RegisterActivityWithOptions(w.DisableArchivalActivity, activity.RegisterOptions{Name: disableArchivalActivity, EnableAutoHeartbeat: true})
 	newWorker.RegisterActivityWithOptions(w.DeprecateDomainActivity, activity.RegisterOptions{Name: deprecateDomainActivity, EnableAutoHeartbeat: true})
 	w.worker = newWorker
