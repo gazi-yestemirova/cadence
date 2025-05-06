@@ -23,7 +23,6 @@
 package dynamicconfigfx
 
 import (
-	"context"
 	"path/filepath"
 
 	"go.uber.org/fx"
@@ -31,8 +30,10 @@ import (
 	"github.com/uber/cadence/common/config"
 	"github.com/uber/cadence/common/dynamicconfig"
 	"github.com/uber/cadence/common/dynamicconfig/configstore"
+	"github.com/uber/cadence/common/dynamicconfig/dynamicproperties"
 	"github.com/uber/cadence/common/log"
 	"github.com/uber/cadence/common/log/tag"
+	"github.com/uber/cadence/common/metrics"
 	"github.com/uber/cadence/common/persistence"
 )
 
@@ -43,15 +44,23 @@ var Module = fx.Options(fx.Provide(New))
 type Params struct {
 	fx.In
 
-	Cfg     config.Config
-	Logger  log.Logger
-	RootDir string `name:"root-dir"`
+	Cfg           config.Config
+	Logger        log.Logger
+	MetricsClient metrics.Client
+	RootDir       string `name:"root-dir"`
 
 	Lifecycle fx.Lifecycle
 }
 
+type Result struct {
+	fx.Out
+
+	Client     dynamicconfig.Client
+	Collection *dynamicconfig.Collection
+}
+
 // New creates dynamicconfig.Client from the configuration
-func New(p Params) dynamicconfig.Client {
+func New(p Params) Result {
 	stopped := make(chan struct{})
 
 	if p.Cfg.DynamicConfig.Client == "" {
@@ -60,10 +69,9 @@ func New(p Params) dynamicconfig.Client {
 		p.Cfg.DynamicConfig.FileBased.Filepath = constructPathIfNeed(p.RootDir, p.Cfg.DynamicConfig.FileBased.Filepath)
 	}
 
-	p.Lifecycle.Append(fx.Hook{OnStop: func(_ context.Context) error {
+	p.Lifecycle.Append(fx.StopHook(func() {
 		close(stopped)
-		return nil
-	}})
+	}))
 
 	var res dynamicconfig.Client
 
@@ -79,6 +87,7 @@ func New(p Params) dynamicconfig.Client {
 				&p.Cfg.DynamicConfig.ConfigStore,
 				&p.Cfg.Persistence,
 				p.Logger,
+				p.MetricsClient,
 				persistence.DynamicConfig,
 			)
 		case dynamicconfig.FileBasedClient:
@@ -95,7 +104,17 @@ func New(p Params) dynamicconfig.Client {
 		res = dynamicconfig.NewNopClient()
 	}
 
-	return res
+	clusterGroupMetadata := p.Cfg.ClusterGroupMetadata
+	dc := dynamicconfig.NewCollection(
+		res,
+		p.Logger,
+		dynamicproperties.ClusterNameFilter(clusterGroupMetadata.CurrentClusterName),
+	)
+
+	return Result{
+		Client:     res,
+		Collection: dc,
+	}
 }
 
 // constructPathIfNeed would append the dir as the root dir

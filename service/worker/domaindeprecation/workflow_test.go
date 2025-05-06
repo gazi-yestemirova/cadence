@@ -80,6 +80,7 @@ func (s *domainDeprecationWorkflowTestSuite) SetupTest() {
 	s.workflowEnv.RegisterWorkflowWithOptions(s.deprecator.DomainDeprecationWorkflow, workflow.RegisterOptions{Name: DomainDeprecationWorkflowTypeName})
 	s.workflowEnv.RegisterActivityWithOptions(s.deprecator.DisableArchivalActivity, activity.RegisterOptions{Name: disableArchivalActivity})
 	s.workflowEnv.RegisterActivityWithOptions(s.deprecator.DeprecateDomainActivity, activity.RegisterOptions{Name: deprecateDomainActivity})
+	s.workflowEnv.RegisterActivityWithOptions(s.deprecator.CheckOpenWorkflowsActivity, activity.RegisterOptions{Name: checkOpenWorkflowsActivity})
 }
 
 func (s *domainDeprecationWorkflowTestSuite) TearDownTest() {
@@ -94,6 +95,8 @@ func (s *domainDeprecationWorkflowTestSuite) TestWorkflow_Success() {
 			SuccessCount: 10,
 			ErrorCount:   0,
 		}, nil).Once()
+	s.workflowEnv.OnActivity(checkOpenWorkflowsActivity, mock.Anything, defaultParams).Return(false, nil)
+
 	s.workflowEnv.ExecuteWorkflow(DomainDeprecationWorkflowTypeName, defaultParams)
 	s.True(s.workflowEnv.IsWorkflowCompleted())
 	s.NoError(s.workflowEnv.GetWorkflowError())
@@ -124,6 +127,24 @@ func (s *domainDeprecationWorkflowTestSuite) TestWorkflow_BatchTerminate_ChildWo
 	s.workflowEnv.OnActivity(deprecateDomainActivity, mock.Anything, defaultParams).Return(nil)
 	s.workflowEnv.OnWorkflow(batcher.BatchWorkflow, mock.Anything, mock.Anything).Return(
 		batcher.HeartBeatDetails{}, mockErr)
+
+	s.workflowEnv.ExecuteWorkflow(DomainDeprecationWorkflowTypeName, defaultParams)
+	s.True(s.workflowEnv.IsWorkflowCompleted())
+	s.Error(s.workflowEnv.GetWorkflowError())
+	s.ErrorContains(s.workflowEnv.GetWorkflowError(), mockErr.Error())
+}
+
+func (s *domainDeprecationWorkflowTestSuite) TestWorkflow_CheckOpenWorkflows_Error() {
+	mockErr := errors.New("error")
+	s.workflowEnv.OnActivity(disableArchivalActivity, mock.Anything, defaultParams).Return(nil)
+	s.workflowEnv.OnActivity(deprecateDomainActivity, mock.Anything, defaultParams).Return(nil)
+	s.workflowEnv.OnWorkflow(batcher.BatchWorkflow, mock.Anything, mock.Anything).Return(
+		batcher.HeartBeatDetails{
+			SuccessCount: 10,
+			ErrorCount:   0,
+		}, nil).Once()
+
+	s.workflowEnv.OnActivity(checkOpenWorkflowsActivity, mock.Anything, defaultParams).Return(true, mockErr)
 
 	s.workflowEnv.ExecuteWorkflow(DomainDeprecationWorkflowTypeName, defaultParams)
 	s.True(s.workflowEnv.IsWorkflowCompleted())

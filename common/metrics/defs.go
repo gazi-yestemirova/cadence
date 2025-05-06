@@ -2085,6 +2085,7 @@ const (
 	CadenceErrQueryFailedCounter
 	CadenceErrLimitExceededCounter
 	CadenceErrContextTimeoutCounter
+	CadenceErrGRPCConnectionClosingCounter
 	CadenceErrRetryTaskCounter
 	CadenceErrBadBinaryCounter
 	CadenceErrClientVersionNotSupportedCounter
@@ -2144,6 +2145,9 @@ const (
 	PersistenceErrDBUnavailableCounterPerDomain
 	PersistenceSampledCounterPerDomain
 	PersistenceEmptyResponseCounterPerDomain
+
+	NoSQLShardStoreReadFromOriginalColumnCounter
+	NoSQLShardStoreReadFromDataBlobCounter
 
 	CadenceClientRequests
 	CadenceClientFailures
@@ -2814,6 +2818,7 @@ var MetricDefs = map[ServiceIdx]map[int]metricDefinition{
 		CadenceErrQueryFailedCounter:                                 {metricName: "cadence_errors_query_failed", metricType: Counter},
 		CadenceErrLimitExceededCounter:                               {metricName: "cadence_errors_limit_exceeded", metricType: Counter},
 		CadenceErrContextTimeoutCounter:                              {metricName: "cadence_errors_context_timeout", metricType: Counter},
+		CadenceErrGRPCConnectionClosingCounter:                       {metricName: "cadence_errors_grpc_connection_closing", metricType: Counter},
 		CadenceErrRetryTaskCounter:                                   {metricName: "cadence_errors_retry_task", metricType: Counter},
 		CadenceErrBadBinaryCounter:                                   {metricName: "cadence_errors_bad_binary", metricType: Counter},
 		CadenceErrClientVersionNotSupportedCounter:                   {metricName: "cadence_errors_client_version_not_supported", metricType: Counter},
@@ -2872,6 +2877,8 @@ var MetricDefs = map[ServiceIdx]map[int]metricDefinition{
 		PersistenceErrDBUnavailableCounterPerDomain:                  {metricName: "persistence_errors_db_unavailable_per_domain", metricRollupName: "persistence_errors_db_unavailable", metricType: Counter},
 		PersistenceSampledCounterPerDomain:                           {metricName: "persistence_sampled_per_domain", metricRollupName: "persistence_sampled", metricType: Counter},
 		PersistenceEmptyResponseCounterPerDomain:                     {metricName: "persistence_empty_response_per_domain", metricRollupName: "persistence_empty_response", metricType: Counter},
+		NoSQLShardStoreReadFromOriginalColumnCounter:                 {metricName: "nosql_shard_store_read_from_original_column", metricType: Counter},
+		NoSQLShardStoreReadFromDataBlobCounter:                       {metricName: "nosql_shard_store_read_from_data_blob", metricType: Counter},
 		CadenceClientRequests:                                        {metricName: "cadence_client_requests", metricType: Counter},
 		CadenceClientFailures:                                        {metricName: "cadence_client_errors", metricType: Counter},
 		CadenceClientLatency:                                         {metricName: "cadence_client_latency", metricType: Timer},

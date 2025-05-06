@@ -31,23 +31,22 @@ import (
 	"github.com/uber/cadence/common/config"
 	"github.com/uber/cadence/common/dynamicconfig/dynamicconfigfx"
 	"github.com/uber/cadence/common/log/logfx"
+	"github.com/uber/cadence/common/metrics/metricsfx"
 )
 
 func TestFxDependencies(t *testing.T) {
 	err := fx.ValidateApp(config.Module,
 		logfx.Module,
+		metricsfx.Module,
 		dynamicconfigfx.Module,
-		fx.Provide(func() appContext {
-			return appContext{
-				CfgContext: config.Context{
-					Environment: "",
-					Zone:        "",
-				},
-				ConfigDir: "",
-				RootDir:   "",
-				Services:  []string{"frontend"},
-			}
+		fx.Supply(appContext{
+			CfgContext: config.Context{
+				Environment: "",
+				Zone:        "",
+			},
+			ConfigDir: "",
+			RootDir:   "",
 		}),
-		Module)
+		Module(""))
 	require.NoError(t, err)
 }
