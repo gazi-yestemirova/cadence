@@ -753,18 +753,6 @@ func (d *domainCLIImpl) updateDomain(
 	return d.domainHandler.UpdateDomain(ctx, request)
 }
 
-func (d *domainCLIImpl) deprecateDomain(
-	ctx context.Context,
-	request *types.DeprecateDomainRequest,
-) error {
-
-	if d.frontendClient != nil {
-		return d.frontendClient.DeprecateDomain(ctx, request)
-	}
-
-	return d.domainHandler.DeprecateDomain(ctx, request)
-}
-
 func (d *domainCLIImpl) describeDomain(
 	ctx context.Context,
 	request *types.DescribeDomainRequest,
