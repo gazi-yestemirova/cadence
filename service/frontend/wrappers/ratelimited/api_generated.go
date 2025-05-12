@@ -62,6 +62,10 @@ func (h *apiHandler) CountWorkflowExecutions(ctx context.Context, cp1 *types.Cou
 	return h.wrapped.CountWorkflowExecutions(ctx, cp1)
 }
 
+func (h *apiHandler) DeleteDomain(ctx context.Context, dp1 *types.DeleteDomainRequest) (err error) {
+	return h.wrapped.DeleteDomain(ctx, dp1)
+}
+
 func (h *apiHandler) DeprecateDomain(ctx context.Context, dp1 *types.DeprecateDomainRequest) (err error) {
 	return h.wrapped.DeprecateDomain(ctx, dp1)
 }

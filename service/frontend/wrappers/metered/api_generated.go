@@ -55,6 +55,21 @@ func (h *apiHandler) CountWorkflowExecutions(ctx context.Context, cp1 *types.Cou
 	}
 	return cp2, err
 }
+func (h *apiHandler) DeleteDomain(ctx context.Context, dp1 *types.DeleteDomainRequest) (err error) {
+	defer func() { log.CapturePanic(recover(), h.logger, &err) }()
+	tags := []tag.Tag{tag.WorkflowHandlerName("DeleteDomain")}
+	scope := h.metricsClient.Scope(metrics.FrontendDeleteDomainScope).Tagged(append(metrics.GetContextTags(ctx), metrics.DomainUnknownTag())...)
+	scope.IncCounter(metrics.CadenceRequests)
+	sw := scope.StartTimer(metrics.CadenceLatency)
+	defer sw.Stop()
+	logger := h.logger.WithTags(tags...)
+
+	err = h.handler.DeleteDomain(ctx, dp1)
+	if err != nil {
+		return h.handleErr(err, scope, logger)
+	}
+	return err
+}
 func (h *apiHandler) DeprecateDomain(ctx context.Context, dp1 *types.DeprecateDomainRequest) (err error) {
 	defer func() { log.CapturePanic(recover(), h.logger, &err) }()
 	tags := []tag.Tag{tag.WorkflowHandlerName("DeprecateDomain")}

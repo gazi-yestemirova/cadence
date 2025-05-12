@@ -1585,6 +1585,20 @@ const (
 	DecisionTypeUpsertWorkflowSearchAttributes
 )
 
+// DeleteDomainRequest is an internal type (TBD...)
+type DeleteDomainRequest struct {
+	Name          string `json:"name,omitempty"`
+	SecurityToken string `json:"securityToken,omitempty"`
+}
+
+// GetName is an internal getter (TBD...)
+func (v *DeleteDomainRequest) GetName() (o string) {
+	if v != nil {
+		return v.Name
+	}
+	return
+}
+
 // DeprecateDomainRequest is an internal type (TBD...)
 type DeprecateDomainRequest struct {
 	Name          string `json:"name,omitempty"`

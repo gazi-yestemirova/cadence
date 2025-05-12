@@ -23,6 +23,11 @@ type Interface interface {
 		CountRequest *shared.CountWorkflowExecutionsRequest,
 	) (*shared.CountWorkflowExecutionsResponse, error)
 
+	DeleteDomain(
+		ctx context.Context,
+		DeleteRequest *shared.DeleteDomainRequest,
+	) error
+
 	DeprecateDomain(
 		ctx context.Context,
 		DeprecateRequest *shared.DeprecateDomainRequest,
@@ -257,6 +262,18 @@ func New(impl Interface, opts ...thrift.RegisterOption) []transport.Procedure {
 					NoWire: countworkflowexecutions_NoWireHandler{impl},
 				},
 				Signature:    "CountWorkflowExecutions(CountRequest *shared.CountWorkflowExecutionsRequest) (*shared.CountWorkflowExecutionsResponse)",
+				ThriftModule: cadence.ThriftModule,
+			},
+
+			thrift.Method{
+				Name: "DeleteDomain",
+				HandlerSpec: thrift.HandlerSpec{
+
+					Type:   transport.Unary,
+					Unary:  thrift.UnaryHandler(h.DeleteDomain),
+					NoWire: deletedomain_NoWireHandler{impl},
+				},
+				Signature:    "DeleteDomain(DeleteRequest *shared.DeleteDomainRequest)",
 				ThriftModule: cadence.ThriftModule,
 			},
 
@@ -778,7 +795,7 @@ func New(impl Interface, opts ...thrift.RegisterOption) []transport.Procedure {
 		},
 	}
 
-	procedures := make([]transport.Procedure, 0, 44)
+	procedures := make([]transport.Procedure, 0, 45)
 	procedures = append(procedures, thrift.BuildProcedures(service, opts...)...)
 	return procedures
 }
@@ -800,6 +817,36 @@ func (h handler) CountWorkflowExecutions(ctx context.Context, body wire.Value) (
 
 	hadError := appErr != nil
 	result, err := cadence.WorkflowService_CountWorkflowExecutions_Helper.WrapResponse(success, appErr)
+
+	var response thrift.Response
+	if err == nil {
+		response.IsApplicationError = hadError
+		response.Body = result
+		if namer, ok := appErr.(yarpcErrorNamer); ok {
+			response.ApplicationErrorName = namer.YARPCErrorName()
+		}
+		if extractor, ok := appErr.(yarpcErrorCoder); ok {
+			response.ApplicationErrorCode = extractor.YARPCErrorCode()
+		}
+		if appErr != nil {
+			response.ApplicationErrorDetails = appErr.Error()
+		}
+	}
+
+	return response, err
+}
+
+func (h handler) DeleteDomain(ctx context.Context, body wire.Value) (thrift.Response, error) {
+	var args cadence.WorkflowService_DeleteDomain_Args
+	if err := args.FromWire(body); err != nil {
+		return thrift.Response{}, yarpcerrors.InvalidArgumentErrorf(
+			"could not decode Thrift request for service 'WorkflowService' procedure 'DeleteDomain': %w", err)
+	}
+
+	appErr := h.impl.DeleteDomain(ctx, args.DeleteRequest)
+
+	hadError := appErr != nil
+	result, err := cadence.WorkflowService_DeleteDomain_Helper.WrapResponse(appErr)
 
 	var response thrift.Response
 	if err == nil {
@@ -2128,6 +2175,43 @@ func (h countworkflowexecutions_NoWireHandler) HandleNoWire(ctx context.Context,
 
 	hadError := appErr != nil
 	result, err := cadence.WorkflowService_CountWorkflowExecutions_Helper.WrapResponse(success, appErr)
+	response := thrift.NoWireResponse{ResponseWriter: rw}
+	if err == nil {
+		response.IsApplicationError = hadError
+		response.Body = result
+		if namer, ok := appErr.(yarpcErrorNamer); ok {
+			response.ApplicationErrorName = namer.YARPCErrorName()
+		}
+		if extractor, ok := appErr.(yarpcErrorCoder); ok {
+			response.ApplicationErrorCode = extractor.YARPCErrorCode()
+		}
+		if appErr != nil {
+			response.ApplicationErrorDetails = appErr.Error()
+		}
+	}
+	return response, err
+
+}
+
+type deletedomain_NoWireHandler struct{ impl Interface }
+
+func (h deletedomain_NoWireHandler) HandleNoWire(ctx context.Context, nwc *thrift.NoWireCall) (thrift.NoWireResponse, error) {
+	var (
+		args cadence.WorkflowService_DeleteDomain_Args
+		rw   stream.ResponseWriter
+		err  error
+	)
+
+	rw, err = nwc.RequestReader.ReadRequest(ctx, nwc.EnvelopeType, nwc.Reader, &args)
+	if err != nil {
+		return thrift.NoWireResponse{}, yarpcerrors.InvalidArgumentErrorf(
+			"could not decode (via no wire) Thrift request for service 'WorkflowService' procedure 'DeleteDomain': %w", err)
+	}
+
+	appErr := h.impl.DeleteDomain(ctx, args.DeleteRequest)
+
+	hadError := appErr != nil
+	result, err := cadence.WorkflowService_DeleteDomain_Helper.WrapResponse(appErr)
 	response := thrift.NoWireResponse{ResponseWriter: rw}
 	if err == nil {
 		response.IsApplicationError = hadError

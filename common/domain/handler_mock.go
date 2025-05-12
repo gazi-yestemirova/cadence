@@ -42,6 +42,20 @@ func (m *MockHandler) EXPECT() *MockHandlerMockRecorder {
 	return m.recorder
 }
 
+// DeleteDomain mocks base method.
+func (m *MockHandler) DeleteDomain(ctx context.Context, deleteRequest *types.DeleteDomainRequest) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteDomain", ctx, deleteRequest)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteDomain indicates an expected call of DeleteDomain.
+func (mr *MockHandlerMockRecorder) DeleteDomain(ctx, deleteRequest any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDomain", reflect.TypeOf((*MockHandler)(nil).DeleteDomain), ctx, deleteRequest)
+}
+
 // DeprecateDomain mocks base method.
 func (m *MockHandler) DeprecateDomain(ctx context.Context, deprecateRequest *types.DeprecateDomainRequest) error {
 	m.ctrl.T.Helper()

@@ -24,6 +24,12 @@ type Interface interface {
 		opts ...yarpc.CallOption,
 	) (*shared.CountWorkflowExecutionsResponse, error)
 
+	DeleteDomain(
+		ctx context.Context,
+		DeleteRequest *shared.DeleteDomainRequest,
+		opts ...yarpc.CallOption,
+	) error
+
 	DeprecateDomain(
 		ctx context.Context,
 		DeprecateRequest *shared.DeprecateDomainRequest,
@@ -335,6 +341,34 @@ func (c client) CountWorkflowExecutions(
 	}
 
 	success, err = cadence.WorkflowService_CountWorkflowExecutions_Helper.UnwrapResponse(&result)
+	return
+}
+
+func (c client) DeleteDomain(
+	ctx context.Context,
+	_DeleteRequest *shared.DeleteDomainRequest,
+	opts ...yarpc.CallOption,
+) (err error) {
+
+	var result cadence.WorkflowService_DeleteDomain_Result
+	args := cadence.WorkflowService_DeleteDomain_Helper.Args(_DeleteRequest)
+
+	if c.nwc != nil && c.nwc.Enabled() {
+		if err = c.nwc.Call(ctx, args, &result, opts...); err != nil {
+			return
+		}
+	} else {
+		var body wire.Value
+		if body, err = c.c.Call(ctx, args, opts...); err != nil {
+			return
+		}
+
+		if err = result.FromWire(body); err != nil {
+			return
+		}
+	}
+
+	err = cadence.WorkflowService_DeleteDomain_Helper.UnwrapResponse(&result)
 	return
 }
 

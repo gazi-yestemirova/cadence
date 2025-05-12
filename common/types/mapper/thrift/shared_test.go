@@ -952,6 +952,20 @@ func TestDecisionTypeConversion(t *testing.T) {
 	}
 }
 
+func TestDeleteDomainRequestConversion(t *testing.T) {
+	testCases := []*types.DeleteDomainRequest{
+		nil,
+		{},
+		&testdata.DeleteDomainRequest,
+	}
+
+	for _, original := range testCases {
+		thriftObj := FromDeleteDomainRequest(original)
+		roundTripObj := ToDeleteDomainRequest(thriftObj)
+		assert.Equal(t, original, roundTripObj)
+	}
+}
+
 func TestDeprecateDomainRequestConversion(t *testing.T) {
 	testCases := []*types.DeprecateDomainRequest{
 		nil,

@@ -19,6 +19,11 @@ func (g frontendClient) CountWorkflowExecutions(ctx context.Context, cp1 *types.
 	return proto.ToCountWorkflowExecutionsResponse(response), proto.ToError(err)
 }
 
+func (g frontendClient) DeleteDomain(ctx context.Context, dp1 *types.DeleteDomainRequest, p1 ...yarpc.CallOption) (err error) {
+	_, err = g.c.DeleteDomain(ctx, proto.FromDeleteDomainRequest(dp1), p1...)
+	return proto.ToError(err)
+}
+
 func (g frontendClient) DeprecateDomain(ctx context.Context, dp1 *types.DeprecateDomainRequest, p1 ...yarpc.CallOption) (err error) {
 	_, err = g.c.DeprecateDomain(ctx, proto.FromDeprecateDomainRequest(dp1), p1...)
 	return proto.ToError(err)

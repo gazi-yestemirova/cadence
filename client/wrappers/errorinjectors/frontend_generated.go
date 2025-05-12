@@ -60,6 +60,26 @@ func (c *frontendClient) CountWorkflowExecutions(ctx context.Context, cp1 *types
 	return
 }
 
+func (c *frontendClient) DeleteDomain(ctx context.Context, dp1 *types.DeleteDomainRequest, p1 ...yarpc.CallOption) (err error) {
+	fakeErr := c.fakeErrFn(c.errorRate)
+	var forwardCall bool
+	if forwardCall = c.forwardCallFn(fakeErr); forwardCall {
+		err = c.client.DeleteDomain(ctx, dp1, p1...)
+	}
+
+	if fakeErr != nil {
+		c.logger.Error(msgFrontendInjectedFakeErr,
+			tag.FrontendClientOperationDeleteDomain,
+			tag.Error(fakeErr),
+			tag.Bool(forwardCall),
+			tag.ClientError(err),
+		)
+		err = fakeErr
+		return
+	}
+	return
+}
+
 func (c *frontendClient) DeprecateDomain(ctx context.Context, dp1 *types.DeprecateDomainRequest, p1 ...yarpc.CallOption) (err error) {
 	fakeErr := c.fakeErrFn(c.errorRate)
 	var forwardCall bool

@@ -16,6 +16,11 @@ func (g APIHandler) CountWorkflowExecutions(ctx context.Context, CountRequest *s
 	return thrift.FromCountWorkflowExecutionsResponse(response), thrift.FromError(err)
 }
 
+func (g APIHandler) DeleteDomain(ctx context.Context, DeleteRequest *shared.DeleteDomainRequest) (err error) {
+	err = g.h.DeleteDomain(ctx, thrift.ToDeleteDomainRequest(DeleteRequest))
+	return thrift.FromError(err)
+}
+
 func (g APIHandler) DeprecateDomain(ctx context.Context, DeprecateRequest *shared.DeprecateDomainRequest) (err error) {
 	err = g.h.DeprecateDomain(ctx, thrift.ToDeprecateDomainRequest(DeprecateRequest))
 	return thrift.FromError(err)

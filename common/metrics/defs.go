@@ -430,6 +430,8 @@ const (
 	// MatchingClientRefreshTaskListPartitionConfigScope tracks RPC calls to matching service
 	MatchingClientRefreshTaskListPartitionConfigScope
 
+	// FrontendClientDeleteDomainScope tracks RPC calls to frontend service
+	FrontendClientDeleteDomainScope
 	// FrontendClientDeprecateDomainScope tracks RPC calls to frontend service
 	FrontendClientDeprecateDomainScope
 	// FrontendClientDescribeDomainScope tracks RPC calls to frontend service
@@ -604,7 +606,9 @@ const (
 	// AdminClientUpdateTaskListPartitionConfigScope is the metrics scope for admin.UpdateTaskListPartitionConfig
 	AdminClientUpdateTaskListPartitionConfigScope
 
-	// DCRedirectionDeprecateDomainScope tracks RPC calls for dc redirection
+	// DCRedirectionDeleteDomainScope tracks RPC calls for dc redirection
+	DCRedirectionDeleteDomainScope
+	// DCRedirectionDeleteDomainScope tracks RPC calls for dc redirection
 	DCRedirectionDeprecateDomainScope
 	// DCRedirectionDescribeDomainScope tracks RPC calls for dc redirection
 	DCRedirectionDescribeDomainScope
@@ -1012,6 +1016,8 @@ const (
 	FrontendDescribeDomainScope
 	// FrontendUpdateDomainScope is the metric scope for frontend.DescribeDomain
 	FrontendUpdateDomainScope
+	// FrontendDeleteDomainScope is the metric scope for frontend.DeleteDomain
+	FrontendDeleteDomainScope
 	// FrontendDeprecateDomainScope is the metric scope for frontend.DeprecateDomain
 	FrontendDeprecateDomainScope
 	// FrontendQueryWorkflowScope is the metric scope for frontend.QueryWorkflow
@@ -1581,6 +1587,7 @@ var ScopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		MatchingClientUpdateTaskListPartitionConfigScope:  {operation: "MatchingClientUpdateTaskListPartitionConfig", tags: map[string]string{CadenceRoleTagName: MatchingClientRoleTagValue}},
 		MatchingClientRefreshTaskListPartitionConfigScope: {operation: "MatchingClientRefreshTaskListPartitionConfig", tags: map[string]string{CadenceRoleTagName: MatchingClientRoleTagValue}},
 
+		FrontendClientDeleteDomainScope:                          {operation: "FrontendClientDeleteDomain", tags: map[string]string{CadenceRoleTagName: FrontendClientRoleTagValue}},
 		FrontendClientDeprecateDomainScope:                       {operation: "FrontendClientDeprecateDomain", tags: map[string]string{CadenceRoleTagName: FrontendClientRoleTagValue}},
 		FrontendClientDescribeDomainScope:                        {operation: "FrontendClientDescribeDomain", tags: map[string]string{CadenceRoleTagName: FrontendClientRoleTagValue}},
 		FrontendClientDescribeTaskListScope:                      {operation: "FrontendClientDescribeTaskList", tags: map[string]string{CadenceRoleTagName: FrontendClientRoleTagValue}},
@@ -1669,6 +1676,7 @@ var ScopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		AdminClientUpdateDomainAsyncWorkflowConfiguratonScope: {operation: "AdminClientUpdateDomainAsyncWorkflowConfiguraton", tags: map[string]string{CadenceRoleTagName: AdminClientRoleTagValue}},
 		AdminClientUpdateTaskListPartitionConfigScope:         {operation: "AdminClientUpdateTaskListPartitionConfig", tags: map[string]string{CadenceRoleTagName: AdminClientRoleTagValue}},
 
+		DCRedirectionDeleteDomainScope:                          {operation: "DCRedirectionDeleteDomain", tags: map[string]string{CadenceRoleTagName: DCRedirectionRoleTagValue}},
 		DCRedirectionDeprecateDomainScope:                       {operation: "DCRedirectionDeprecateDomain", tags: map[string]string{CadenceRoleTagName: DCRedirectionRoleTagValue}},
 		DCRedirectionDescribeDomainScope:                        {operation: "DCRedirectionDescribeDomain", tags: map[string]string{CadenceRoleTagName: DCRedirectionRoleTagValue}},
 		DCRedirectionDescribeTaskListScope:                      {operation: "DCRedirectionDescribeTaskList", tags: map[string]string{CadenceRoleTagName: DCRedirectionRoleTagValue}},
@@ -1868,6 +1876,7 @@ var ScopeDefs = map[ServiceIdx]map[int]scopeDefinition{
 		FrontendDescribeDomainScope:                        {operation: "DescribeDomain"},
 		FrontendListDomainsScope:                           {operation: "ListDomain"},
 		FrontendUpdateDomainScope:                          {operation: "UpdateDomain"},
+		FrontendDeleteDomainScope:                          {operation: "DeleteDomain"},
 		FrontendDeprecateDomainScope:                       {operation: "DeprecateDomain"},
 		FrontendQueryWorkflowScope:                         {operation: "QueryWorkflow"},
 		FrontendDescribeWorkflowExecutionScope:             {operation: "DescribeWorkflowExecution"},

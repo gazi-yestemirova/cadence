@@ -18,6 +18,11 @@ func (g frontendClient) CountWorkflowExecutions(ctx context.Context, cp1 *types.
 	return thrift.ToCountWorkflowExecutionsResponse(response), thrift.ToError(err)
 }
 
+func (g frontendClient) DeleteDomain(ctx context.Context, dp1 *types.DeleteDomainRequest, p1 ...yarpc.CallOption) (err error) {
+	err = g.c.DeleteDomain(ctx, thrift.FromDeleteDomainRequest(dp1), p1...)
+	return thrift.ToError(err)
+}
+
 func (g frontendClient) DeprecateDomain(ctx context.Context, dp1 *types.DeprecateDomainRequest, p1 ...yarpc.CallOption) (err error) {
 	err = g.c.DeprecateDomain(ctx, thrift.FromDeprecateDomainRequest(dp1), p1...)
 	return thrift.ToError(err)

@@ -83,6 +83,10 @@ func (handler *clusterRedirectionHandler) CountWorkflowExecutions(ctx context.Co
 	return cp2, err
 }
 
+func (handler *clusterRedirectionHandler) DeleteDomain(ctx context.Context, dp1 *types.DeleteDomainRequest) (err error) {
+	return handler.frontendHandler.DeleteDomain(ctx, dp1)
+}
+
 func (handler *clusterRedirectionHandler) DeprecateDomain(ctx context.Context, dp1 *types.DeprecateDomainRequest) (err error) {
 	return handler.frontendHandler.DeprecateDomain(ctx, dp1)
 }

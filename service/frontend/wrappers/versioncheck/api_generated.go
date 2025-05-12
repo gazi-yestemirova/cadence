@@ -41,6 +41,14 @@ func (h *versionCheckHandler) CountWorkflowExecutions(ctx context.Context, cp1 *
 	return h.frontendHandler.CountWorkflowExecutions(ctx, cp1)
 }
 
+func (h *versionCheckHandler) DeleteDomain(ctx context.Context, dp1 *types.DeleteDomainRequest) (err error) {
+	err = h.versionChecker.ClientSupported(ctx, h.config.EnableClientVersionCheck())
+	if err != nil {
+		return
+	}
+	return h.frontendHandler.DeleteDomain(ctx, dp1)
+}
+
 func (h *versionCheckHandler) DeprecateDomain(ctx context.Context, dp1 *types.DeprecateDomainRequest) (err error) {
 	err = h.versionChecker.ClientSupported(ctx, h.config.EnableClientVersionCheck())
 	if err != nil {

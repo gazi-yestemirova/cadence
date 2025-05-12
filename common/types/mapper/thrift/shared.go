@@ -1514,6 +1514,28 @@ func ToDecisionType(t *shared.DecisionType) *types.DecisionType {
 	panic("unexpected enum value")
 }
 
+// FromDeleteDomainRequest converts internal DeleteDomainRequest type to thrift
+func FromDeleteDomainRequest(t *types.DeleteDomainRequest) *shared.DeleteDomainRequest {
+	if t == nil {
+		return nil
+	}
+	return &shared.DeleteDomainRequest{
+		Name:          &t.Name,
+		SecurityToken: &t.SecurityToken,
+	}
+}
+
+// ToDeleteDomainRequest converts thrift DeleteDomainRequest type to internal
+func ToDeleteDomainRequest(t *shared.DeleteDomainRequest) *types.DeleteDomainRequest {
+	if t == nil {
+		return nil
+	}
+	return &types.DeleteDomainRequest{
+		Name:          t.GetName(),
+		SecurityToken: t.GetSecurityToken(),
+	}
+}
+
 // FromDeprecateDomainRequest converts internal DeprecateDomainRequest type to thrift
 func FromDeprecateDomainRequest(t *types.DeprecateDomainRequest) *shared.DeprecateDomainRequest {
 	if t == nil {

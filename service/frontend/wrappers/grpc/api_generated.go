@@ -26,6 +26,11 @@ func (g APIHandler) CountWorkflowExecutions(ctx context.Context, request *apiv1.
 	return proto.FromCountWorkflowExecutionsResponse(response), proto.FromError(err)
 }
 
+func (g APIHandler) DeleteDomain(ctx context.Context, request *apiv1.DeleteDomainRequest) (*apiv1.DeleteDomainResponse, error) {
+	err := g.h.DeleteDomain(ctx, proto.ToDeleteDomainRequest(request))
+	return &apiv1.DeleteDomainResponse{}, proto.FromError(err)
+}
+
 func (g APIHandler) DeprecateDomain(ctx context.Context, request *apiv1.DeprecateDomainRequest) (*apiv1.DeprecateDomainResponse, error) {
 	err := g.h.DeprecateDomain(ctx, proto.ToDeprecateDomainRequest(request))
 	return &apiv1.DeprecateDomainResponse{}, proto.FromError(err)

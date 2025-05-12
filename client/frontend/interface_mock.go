@@ -63,6 +63,25 @@ func (mr *MockClientMockRecorder) CountWorkflowExecutions(arg0, arg1 any, arg2 .
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountWorkflowExecutions", reflect.TypeOf((*MockClient)(nil).CountWorkflowExecutions), varargs...)
 }
 
+// DeleteDomain mocks base method.
+func (m *MockClient) DeleteDomain(arg0 context.Context, arg1 *types.DeleteDomainRequest, arg2 ...yarpc.CallOption) error {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "DeleteDomain", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteDomain indicates an expected call of DeleteDomain.
+func (mr *MockClientMockRecorder) DeleteDomain(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDomain", reflect.TypeOf((*MockClient)(nil).DeleteDomain), varargs...)
+}
+
 // DeprecateDomain mocks base method.
 func (m *MockClient) DeprecateDomain(arg0 context.Context, arg1 *types.DeprecateDomainRequest, arg2 ...yarpc.CallOption) error {
 	m.ctrl.T.Helper()

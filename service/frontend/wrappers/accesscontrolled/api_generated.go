@@ -57,6 +57,23 @@ func (a *apiHandler) CountWorkflowExecutions(ctx context.Context, cp1 *types.Cou
 	return a.handler.CountWorkflowExecutions(ctx, cp1)
 }
 
+func (a *apiHandler) DeleteDomain(ctx context.Context, dp1 *types.DeleteDomainRequest) (err error) {
+	scope := a.GetMetricsClient().Scope(metrics.FrontendDeleteDomainScope)
+	attr := &authorization.Attributes{
+		APIName:     "DeleteDomain",
+		Permission:  authorization.PermissionAdmin,
+		RequestBody: authorization.NewFilteredRequestBody(dp1),
+	}
+	isAuthorized, err := a.isAuthorized(ctx, attr, scope)
+	if err != nil {
+		return err
+	}
+	if !isAuthorized {
+		return errUnauthorized
+	}
+	return a.handler.DeleteDomain(ctx, dp1)
+}
+
 func (a *apiHandler) DeprecateDomain(ctx context.Context, dp1 *types.DeprecateDomainRequest) (err error) {
 	scope := a.GetMetricsClient().Scope(metrics.FrontendDeprecateDomainScope)
 	attr := &authorization.Attributes{

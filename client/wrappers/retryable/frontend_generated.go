@@ -42,6 +42,13 @@ func (c *frontendClient) CountWorkflowExecutions(ctx context.Context, cp1 *types
 	return resp, err
 }
 
+func (c *frontendClient) DeleteDomain(ctx context.Context, dp1 *types.DeleteDomainRequest, p1 ...yarpc.CallOption) (err error) {
+	op := func() error {
+		return c.client.DeleteDomain(ctx, dp1, p1...)
+	}
+	return c.throttleRetry.Do(ctx, op)
+}
+
 func (c *frontendClient) DeprecateDomain(ctx context.Context, dp1 *types.DeprecateDomainRequest, p1 ...yarpc.CallOption) (err error) {
 	op := func() error {
 		return c.client.DeprecateDomain(ctx, dp1, p1...)

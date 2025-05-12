@@ -41,6 +41,19 @@ func (c *frontendClient) CountWorkflowExecutions(ctx context.Context, cp1 *types
 	return cp2, err
 }
 
+func (c *frontendClient) DeleteDomain(ctx context.Context, dp1 *types.DeleteDomainRequest, p1 ...yarpc.CallOption) (err error) {
+	c.metricsClient.IncCounter(metrics.FrontendClientDeleteDomainScope, metrics.CadenceClientRequests)
+
+	sw := c.metricsClient.StartTimer(metrics.FrontendClientDeleteDomainScope, metrics.CadenceClientLatency)
+	err = c.client.DeleteDomain(ctx, dp1, p1...)
+	sw.Stop()
+
+	if err != nil {
+		c.metricsClient.IncCounter(metrics.FrontendClientDeleteDomainScope, metrics.CadenceClientFailures)
+	}
+	return err
+}
+
 func (c *frontendClient) DeprecateDomain(ctx context.Context, dp1 *types.DeprecateDomainRequest, p1 ...yarpc.CallOption) (err error) {
 	c.metricsClient.IncCounter(metrics.FrontendClientDeprecateDomainScope, metrics.CadenceClientRequests)
 

@@ -338,6 +338,7 @@ var (
 	MaintainCorruptWorkflow                                   = clientOperation("maintain-corrupt-workflow")
 	AdminClientOperationUpdateTaskListPartitionConfig         = clientOperation("admin-update-task-list-partition-config")
 
+	FrontendClientOperationDeleteDomain                          = clientOperation("frontend-delete-domain")
 	FrontendClientOperationDeprecateDomain                       = clientOperation("frontend-deprecate-domain")
 	FrontendClientOperationDescribeDomain                        = clientOperation("frontend-describe-domain")
 	FrontendClientOperationDescribeTaskList                      = clientOperation("frontend-describe-task-list")

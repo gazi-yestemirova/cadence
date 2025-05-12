@@ -143,9 +143,24 @@ func (wh *WorkflowHandler) UpdateDomain(
 	return resp, nil
 }
 
-// DeprecateDomain us used to update status of a registered domain to DEPRECATED. Once the domain is deprecated
+// DeleteDomain permanently removes a domain record. This operation:
+// - Requires domain to be in DEPRECATED status
+// - Cannot be performed on domains with running workflows
+// - Is irreversible and removes all domain data
+// - Requires proper permissions and security token
+func (wh *WorkflowHandler) DeleteDomain(ctx context.Context, deleteRequest *types.DeleteDomainRequest) (retError error) {
+	if wh.isShuttingDown() {
+		return validate.ErrShuttingDown
+	}
+	if err := wh.requestValidator.ValidateDeleteDomainRequest(ctx, deleteRequest); err != nil {
+		return err
+	}
+	return wh.domainHandler.DeleteDomain(ctx, deleteRequest)
+}
+
+// DeprecateDomain is used to update status of a registered domain to DEleTED. Once the domain is deleted
 // it cannot be used to start new workflow executions.  Existing workflow executions will continue to run on
-// deprecated domains.
+// deleted domains.
 func (wh *WorkflowHandler) DeprecateDomain(ctx context.Context, deprecateRequest *types.DeprecateDomainRequest) (retError error) {
 	if wh.isShuttingDown() {
 		return validate.ErrShuttingDown
