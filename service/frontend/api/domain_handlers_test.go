@@ -291,7 +291,7 @@ func TestDeleteDomain(t *testing.T) {
 		expectedError string
 	}{
 		{
-			name: "success - delete deprecated domain",
+			name: "success_delete_deprecated_domain",
 			req: &types.DeleteDomainRequest{
 				Name: domainName,
 			},
@@ -313,7 +313,7 @@ func TestDeleteDomain(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "failure - domain not found",
+			name: "failure_domain_not_found",
 			req: &types.DeleteDomainRequest{
 				Name: domainName,
 			},
@@ -327,7 +327,7 @@ func TestDeleteDomain(t *testing.T) {
 			expectedError: "domain not found",
 		},
 		{
-			name: "failure - domain not deprecated",
+			name: "failure_domain_not_deprecated",
 			req: &types.DeleteDomainRequest{
 				Name: domainName,
 			},
@@ -346,7 +346,7 @@ func TestDeleteDomain(t *testing.T) {
 			expectedError: "Domain is not in a deprecated state.",
 		},
 		{
-			name: "failure - domain has workflow history",
+			name: "failure_domain_has_workflow_history",
 			req: &types.DeleteDomainRequest{
 				Name: domainName,
 			},
@@ -377,7 +377,7 @@ func TestDeleteDomain(t *testing.T) {
 			expectedError: "Domain still have workflow execution history.",
 		},
 		{
-			name: "failure - delete domain error",
+			name: "failure_delete_domain_error",
 			req: &types.DeleteDomainRequest{
 				Name: domainName,
 			},
