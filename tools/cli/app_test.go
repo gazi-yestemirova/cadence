@@ -200,6 +200,27 @@ var describeDomainResponseServer = &types.DescribeDomainResponse{
 	},
 }
 
+func (s *cliAppSuite) TestDomainDelete() {
+	resp := describeDomainResponseServer
+	s.serverFrontendClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(resp, nil)
+	s.serverFrontendClient.EXPECT().DeleteDomain(gomock.Any(), gomock.Any()).Return(resp, nil)
+	err := s.app.Run([]string{"", "--do", domainName, "domain", "delete"})
+	s.Nil(err)
+}
+
+func (s *cliAppSuite) TestDomainDelete_DomainNotExist() {
+	resp := describeDomainResponseServer
+	s.serverFrontendClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(resp, &types.EntityNotExistsError{})
+	s.Error(s.app.Run([]string{"", "--do", domainName, "domain", "delete"}))
+}
+
+func (s *cliAppSuite) TestDomainDelete_Failed() {
+	resp := describeDomainResponseServer
+	s.serverFrontendClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(resp, nil)
+	s.serverFrontendClient.EXPECT().DeleteDomain(gomock.Any(), gomock.Any()).Return(resp, &types.BadRequestError{"mock error"})
+	s.Error(s.app.Run([]string{"", "--do", domainName, "domain", "delete"}))
+}
+
 func (s *cliAppSuite) TestDomainDeprecate() {
 	s.serverFrontendClient.EXPECT().StartWorkflowExecution(gomock.Any(), gomock.Any()).Return(&types.StartWorkflowExecutionResponse{
 		RunID: "run-id-example",
