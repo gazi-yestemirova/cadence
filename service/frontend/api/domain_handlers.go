@@ -147,7 +147,6 @@ func (wh *WorkflowHandler) UpdateDomain(
 // - Requires domain to be in DEPRECATED status
 // - Cannot be performed on domains with running workflows
 // - Is irreversible and removes all domain data
-// - Requires proper permissions and security token
 func (wh *WorkflowHandler) DeleteDomain(ctx context.Context, deleteRequest *types.DeleteDomainRequest) (retError error) {
 	if wh.isShuttingDown() {
 		return validate.ErrShuttingDown
