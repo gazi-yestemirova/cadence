@@ -625,7 +625,7 @@ func (d *handlerImpl) DeleteDomain(
 			getResponse.PreviousFailoverVersion,
 			isGlobalDomain,
 		); err != nil {
-			return err
+			return fmt.Errorf("unable to delete a domain in replica cluster: %v", err)
 		}
 	}
 
