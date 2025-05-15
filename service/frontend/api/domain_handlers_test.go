@@ -25,13 +25,13 @@ package api
 import (
 	"context"
 	"errors"
-	"github.com/uber/cadence/common/dynamicconfig/dynamicproperties"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/mock/gomock"
 
+	"github.com/uber/cadence/common/dynamicconfig/dynamicproperties"
 	"github.com/uber/cadence/common/persistence"
 	"github.com/uber/cadence/common/types"
 )
