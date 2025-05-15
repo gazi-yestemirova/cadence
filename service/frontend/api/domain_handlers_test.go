@@ -412,7 +412,7 @@ func TestDeleteDomain(t *testing.T) {
 				deps.mockRequestValidator.EXPECT().ValidateDeleteDomainRequest(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			expectError:   true,
-			expectedError: "Domain deletion is not enabled.",
+			expectedError: "Domain deletion feature is not enabled.",
 		},
 	}
 
