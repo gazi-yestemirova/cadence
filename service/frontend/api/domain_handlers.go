@@ -154,9 +154,7 @@ func (wh *WorkflowHandler) DeleteDomain(ctx context.Context, deleteRequest *type
 	if err := wh.requestValidator.ValidateDeleteDomainRequest(ctx, deleteRequest); err != nil {
 		return err
 	}
-	fmt.Println("handler")
-	fmt.Println(wh.config.EnableDomainDeletion())
-	fmt.Println("===")
+
 	if !wh.config.EnableDomainDeletion() {
 		return &types.BadRequestError{Message: "Domain deletion is not enabled."}
 	}
