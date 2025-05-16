@@ -240,6 +240,29 @@ func (s *cliAppSuite) TestDomainDelete_Failed() {
 	s.Error(s.app.Run([]string{"", "--do", domainName, "domain", "delete", "--st", "test-token"}))
 }
 
+func (s *cliAppSuite) TestDomainDelete_Cancelled() {
+	resp := describeDomainResponseServer
+	s.serverFrontendClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(resp, nil)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	defer func() {
+		os.Stdout = oldStdout
+	}()
+
+	defer s.mockStdinInput("No")()
+	err := s.app.Run([]string{"", "--do", domainName, "domain", "delete", "--st", "test-token"})
+	s.Nil(err)
+
+	w.Close()
+	var stdoutBuf bytes.Buffer
+	io.Copy(&stdoutBuf, r)
+
+	s.Contains(stdoutBuf.String(), "Domain deletion cancelled")
+}
+
 func (s *cliAppSuite) TestDomainDeprecate() {
 	s.serverFrontendClient.EXPECT().StartWorkflowExecution(gomock.Any(), gomock.Any()).Return(&types.StartWorkflowExecutionResponse{
 		RunID: "run-id-example",

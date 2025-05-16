@@ -334,7 +334,6 @@ func (d *domainCLIImpl) DeleteDomain(c *cli.Context) error {
 		return commoncli.Problem(fmt.Sprintf("Domain %s does not exist.", domainName), err)
 	}
 
-	// Print domain details
 	if err := Render(c, newDomainRow(resp), RenderOptions{
 		DefaultTemplate: templateDomain,
 		Color:           true,
@@ -344,7 +343,6 @@ func (d *domainCLIImpl) DeleteDomain(c *cli.Context) error {
 		return fmt.Errorf("failed to render domain details: %w", err)
 	}
 
-	// Ask for confirmation
 	fmt.Print("Do you want to delete this domain? \n")
 	reader := bufio.NewReader(os.Stdin)
 	for {
