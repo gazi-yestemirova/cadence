@@ -25,7 +25,6 @@ import (
 	"github.com/uber/cadence/common/log"
 	"github.com/uber/cadence/common/log/tag"
 	"github.com/uber/cadence/common/persistence"
-	"github.com/uber/cadence/service/history/engine"
 	"github.com/uber/cadence/service/history/shard"
 	"github.com/uber/cadence/service/history/task"
 )
@@ -33,7 +32,6 @@ import (
 func newTimerQueueActiveProcessor(
 	clusterName string,
 	shard shard.Context,
-	historyEngine engine.Engine,
 	taskProcessor task.Processor,
 	taskAllocator TaskAllocator,
 	taskExecutor task.Executor,
@@ -62,13 +60,11 @@ func newTimerQueueActiveProcessor(
 	}
 
 	updateMaxReadLevel := func() task.Key {
-		return newTimerTaskKey(shard.UpdateIfNeededAndGetQueueMaxReadLevel(persistence.HistoryTaskCategoryTimer, clusterName).ScheduledTime, 0)
+		return newTimerTaskKey(shard.UpdateIfNeededAndGetQueueMaxReadLevel(persistence.HistoryTaskCategoryTimer, clusterName).GetScheduledTime(), 0)
 	}
 
 	updateClusterAckLevel := func(ackLevel task.Key) error {
-		return shard.UpdateQueueClusterAckLevel(persistence.HistoryTaskCategoryTimer, clusterName, persistence.HistoryTaskKey{
-			ScheduledTime: ackLevel.(timerTaskKey).visibilityTimestamp,
-		})
+		return shard.UpdateQueueClusterAckLevel(persistence.HistoryTaskCategoryTimer, clusterName, persistence.NewHistoryTaskKey(ackLevel.(timerTaskKey).visibilityTimestamp, 0))
 	}
 
 	updateProcessingQueueStates := func(states []ProcessingQueueState) error {

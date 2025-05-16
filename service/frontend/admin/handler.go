@@ -1295,7 +1295,7 @@ func (adh *adminHandlerImpl) ResendReplicationTasks(
 	}
 	resender := ndc.NewHistoryResender(
 		adh.GetDomainCache(),
-		adh.GetRemoteAdminClient(request.GetRemoteCluster()),
+		adh.GetClientBean(),
 		func(ctx context.Context, request *types.ReplicateEventsV2Request) error {
 			return adh.GetHistoryClient().ReplicateEventsV2(ctx, request)
 		},
@@ -1304,6 +1304,7 @@ func (adh *adminHandlerImpl) ResendReplicationTasks(
 		adh.GetLogger(),
 	)
 	return resender.SendSingleWorkflowHistory(
+		request.GetRemoteCluster(),
 		request.DomainID,
 		request.GetWorkflowID(),
 		request.GetRunID(),

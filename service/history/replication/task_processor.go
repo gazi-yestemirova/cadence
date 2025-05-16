@@ -267,7 +267,7 @@ func (p *taskProcessorImpl) cleanupReplicationTaskLoop() {
 func (p *taskProcessorImpl) cleanupAckedReplicationTasks() error {
 	minAckLevel := int64(math.MaxInt64)
 	for clusterName := range p.shard.GetClusterMetadata().GetRemoteClusterInfo() {
-		ackLevel := p.shard.GetQueueClusterAckLevel(persistence.HistoryTaskCategoryReplication, clusterName).TaskID
+		ackLevel := p.shard.GetQueueClusterAckLevel(persistence.HistoryTaskCategoryReplication, clusterName).GetTaskID()
 		if ackLevel < minAckLevel {
 			minAckLevel = ackLevel
 		}
@@ -278,18 +278,16 @@ func (p *taskProcessorImpl) cleanupAckedReplicationTasks() error {
 		metrics.TargetClusterTag(p.currentCluster),
 	).RecordTimer(
 		metrics.ReplicationTasksLag,
-		time.Duration(p.shard.UpdateIfNeededAndGetQueueMaxReadLevel(persistence.HistoryTaskCategoryReplication, p.currentCluster).TaskID-minAckLevel),
+		time.Duration(p.shard.UpdateIfNeededAndGetQueueMaxReadLevel(persistence.HistoryTaskCategoryReplication, p.currentCluster).GetTaskID()-minAckLevel),
 	)
 	for {
 		pageSize := p.config.ReplicatorTaskDeleteBatchSize()
 		resp, err := p.shard.GetExecutionManager().RangeCompleteHistoryTask(
 			context.Background(),
 			&persistence.RangeCompleteHistoryTaskRequest{
-				TaskCategory: persistence.HistoryTaskCategoryReplication,
-				ExclusiveMaxTaskKey: persistence.HistoryTaskKey{
-					TaskID: minAckLevel + 1,
-				},
-				PageSize: pageSize,
+				TaskCategory:        persistence.HistoryTaskCategoryReplication,
+				ExclusiveMaxTaskKey: persistence.NewImmediateTaskKey(minAckLevel + 1),
+				PageSize:            pageSize,
 			},
 		)
 		if err != nil {
@@ -606,7 +604,10 @@ func (p *taskProcessorImpl) triggerDataInconsistencyScan(replicationTask *types.
 	if err != nil {
 		return err
 	}
-	client := p.shard.GetService().GetClientBean().GetRemoteFrontendClient(clusterName)
+	client, err := p.shard.GetService().GetClientBean().GetRemoteFrontendClient(clusterName)
+	if err != nil {
+		return err
+	}
 	fixExecution := entity.Execution{
 		DomainID:   domainID,
 		WorkflowID: workflowID,

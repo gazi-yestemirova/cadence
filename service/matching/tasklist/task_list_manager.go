@@ -119,6 +119,7 @@ type (
 		startWG       sync.WaitGroup // ensures that background processes do not start until setup is ready
 		stopWG        sync.WaitGroup
 		stopped       int32
+		stoppedLock   sync.RWMutex
 		closeCallback func(Manager)
 		throttleRetry *backoff.ThrottleRetry
 
@@ -302,6 +303,8 @@ func (c *taskListManagerImpl) Start() error {
 
 // Stop stops task list manager and calls Stop on all background child objects
 func (c *taskListManagerImpl) Stop() {
+	c.stoppedLock.Lock()
+	defer c.stoppedLock.Unlock()
 	if !atomic.CompareAndSwapInt32(&c.stopped, 0, 1) {
 		return
 	}
@@ -755,6 +758,21 @@ func (c *taskListManagerImpl) DescribeTaskList(includeTaskListStatus bool) *type
 	}
 
 	return response
+}
+
+func (c *taskListManagerImpl) ReleaseBlockedPollers() error {
+	c.stoppedLock.RLock()
+	defer c.stoppedLock.RUnlock()
+
+	if atomic.LoadInt32(&c.stopped) == 1 {
+		c.logger.Info("Task list manager is already stopped")
+		return errShutdown
+	}
+
+	c.matcher.DisconnectBlockedPollers()
+	c.matcher.RefreshCancelContext()
+
+	return nil
 }
 
 func (c *taskListManagerImpl) String() string {

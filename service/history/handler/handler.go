@@ -83,6 +83,7 @@ type (
 		failoverCoordinator     failover.Coordinator
 		workflowIDCache         workflowcache.WFCache
 		ratelimitAggregator     algorithm.RequestWeighted
+		queueFactories          []queue.Factory
 	}
 )
 
@@ -111,16 +112,19 @@ func NewHandler(
 
 // Start starts the handler
 func (h *handlerImpl) Start() {
-	h.replicationTaskFetchers = replication.NewTaskFetchers(
+	var err error
+	h.replicationTaskFetchers, err = replication.NewTaskFetchers(
 		h.GetLogger(),
 		h.config,
 		h.GetClusterMetadata(),
 		h.GetClientBean(),
 	)
+	if err != nil {
+		h.GetLogger().Fatal("Creating replication task fetchers failed", tag.Error(err))
+	}
 
 	h.replicationTaskFetchers.Start()
 
-	var err error
 	taskPriorityAssigner := task.NewPriorityAssigner(
 		h.GetClusterMetadata().GetCurrentClusterName(),
 		h.GetDomainCache(),
@@ -156,6 +160,18 @@ func (h *handlerImpl) Start() {
 	)
 	h.queueTaskProcessor = task.NewRateLimitedProcessor(taskProcessor, taskRateLimiter)
 	h.queueTaskProcessor.Start()
+
+	h.queueFactories = []queue.Factory{
+		queue.NewTransferQueueFactory(
+			h.queueTaskProcessor,
+			h.GetArchiverClient(),
+			h.workflowIDCache,
+		),
+		queue.NewTimerQueueFactory(
+			h.queueTaskProcessor,
+			h.GetArchiverClient(),
+		),
+	}
 
 	h.historyEventNotifier = events.NewNotifier(h.GetTimeSource(), h.GetMetricsClient(), h.config.GetShardID)
 	// events notifier must starts before controller
@@ -216,15 +232,12 @@ func (h *handlerImpl) CreateEngine(
 		shardContext,
 		h.GetVisibilityManager(),
 		h.GetMatchingClient(),
-		h.GetSDKClient(),
 		h.historyEventNotifier,
 		h.config,
 		h.replicationTaskFetchers,
 		h.GetMatchingRawClient(),
-		h.queueTaskProcessor,
 		h.failoverCoordinator,
-		h.workflowIDCache,
-		queue.NewProcessorFactory(),
+		h.queueFactories,
 	)
 }
 
@@ -740,24 +753,17 @@ func (h *handlerImpl) RemoveTask(
 	case commonconstants.TaskTypeTransfer:
 		return executionMgr.CompleteHistoryTask(ctx, &persistence.CompleteHistoryTaskRequest{
 			TaskCategory: persistence.HistoryTaskCategoryTransfer,
-			TaskKey: persistence.HistoryTaskKey{
-				TaskID: request.GetTaskID(),
-			},
+			TaskKey:      persistence.NewImmediateTaskKey(request.GetTaskID()),
 		})
 	case commonconstants.TaskTypeTimer:
 		return executionMgr.CompleteHistoryTask(ctx, &persistence.CompleteHistoryTaskRequest{
 			TaskCategory: persistence.HistoryTaskCategoryTimer,
-			TaskKey: persistence.HistoryTaskKey{
-				ScheduledTime: time.Unix(0, request.GetVisibilityTimestamp()),
-				TaskID:        request.GetTaskID(),
-			},
+			TaskKey:      persistence.NewHistoryTaskKey(time.Unix(0, request.GetVisibilityTimestamp()), request.GetTaskID()),
 		})
 	case commonconstants.TaskTypeReplication:
 		return executionMgr.CompleteHistoryTask(ctx, &persistence.CompleteHistoryTaskRequest{
 			TaskCategory: persistence.HistoryTaskCategoryReplication,
-			TaskKey: persistence.HistoryTaskKey{
-				TaskID: request.GetTaskID(),
-			},
+			TaskKey:      persistence.NewImmediateTaskKey(request.GetTaskID()),
 		})
 	default:
 		return constants.ErrInvalidTaskType

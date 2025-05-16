@@ -41,6 +41,7 @@ import (
 	algorithm "github.com/uber/cadence/common/quotas/global/algorithm"
 	rpc "github.com/uber/cadence/common/quotas/global/rpc"
 	events "github.com/uber/cadence/service/history/events"
+	archiver0 "github.com/uber/cadence/service/worker/archiver"
 )
 
 // MockResource is a mock of Resource interface.
@@ -93,6 +94,20 @@ func (m *MockResource) GetArchivalMetadata() archiver.ArchivalMetadata {
 func (mr *MockResourceMockRecorder) GetArchivalMetadata() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArchivalMetadata", reflect.TypeOf((*MockResource)(nil).GetArchivalMetadata))
+}
+
+// GetArchiverClient mocks base method.
+func (m *MockResource) GetArchiverClient() archiver0.Client {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetArchiverClient")
+	ret0, _ := ret[0].(archiver0.Client)
+	return ret0
+}
+
+// GetArchiverClient indicates an expected call of GetArchiverClient.
+func (mr *MockResourceMockRecorder) GetArchiverClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArchiverClient", reflect.TypeOf((*MockResource)(nil).GetArchiverClient))
 }
 
 // GetArchiverProvider mocks base method.
@@ -531,11 +546,12 @@ func (mr *MockResourceMockRecorder) GetRatelimiterAlgorithm() *gomock.Call {
 }
 
 // GetRemoteAdminClient mocks base method.
-func (m *MockResource) GetRemoteAdminClient(cluster string) admin.Client {
+func (m *MockResource) GetRemoteAdminClient(cluster string) (admin.Client, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetRemoteAdminClient", cluster)
 	ret0, _ := ret[0].(admin.Client)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetRemoteAdminClient indicates an expected call of GetRemoteAdminClient.
@@ -545,11 +561,12 @@ func (mr *MockResourceMockRecorder) GetRemoteAdminClient(cluster any) *gomock.Ca
 }
 
 // GetRemoteFrontendClient mocks base method.
-func (m *MockResource) GetRemoteFrontendClient(cluster string) frontend.Client {
+func (m *MockResource) GetRemoteFrontendClient(cluster string) (frontend.Client, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetRemoteFrontendClient", cluster)
 	ret0, _ := ret[0].(frontend.Client)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetRemoteFrontendClient indicates an expected call of GetRemoteFrontendClient.
