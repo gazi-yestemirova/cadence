@@ -200,25 +200,44 @@ var describeDomainResponseServer = &types.DescribeDomainResponse{
 	},
 }
 
+// This is used to mock the domain deletion confirmation
+func (s *cliAppSuite) mockStdinInput(input string) func() {
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	os.Stdin = r
+
+	go func() {
+		w.Write([]byte(input + "\n"))
+		w.Close()
+	}()
+
+	return func() {
+		os.Stdin = oldStdin
+	}
+}
+
 func (s *cliAppSuite) TestDomainDelete() {
 	resp := describeDomainResponseServer
 	s.serverFrontendClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(resp, nil)
-	s.serverFrontendClient.EXPECT().DeleteDomain(gomock.Any(), gomock.Any()).Return(resp, nil)
-	err := s.app.Run([]string{"", "--do", domainName, "domain", "delete"})
+	s.serverFrontendClient.EXPECT().DeleteDomain(gomock.Any(), gomock.Any()).Return(nil)
+
+	defer s.mockStdinInput("Yes")()
+	err := s.app.Run([]string{"", "--do", domainName, "domain", "delete", "--st", "test-token"})
 	s.Nil(err)
 }
 
 func (s *cliAppSuite) TestDomainDelete_DomainNotExist() {
-	resp := describeDomainResponseServer
-	s.serverFrontendClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(resp, &types.EntityNotExistsError{})
-	s.Error(s.app.Run([]string{"", "--do", domainName, "domain", "delete"}))
+	s.serverFrontendClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(nil, &types.EntityNotExistsError{})
+	s.Error(s.app.Run([]string{"", "--do", domainName, "domain", "delete", "--st", "test-token"}))
 }
 
 func (s *cliAppSuite) TestDomainDelete_Failed() {
 	resp := describeDomainResponseServer
 	s.serverFrontendClient.EXPECT().DescribeDomain(gomock.Any(), gomock.Any()).Return(resp, nil)
-	s.serverFrontendClient.EXPECT().DeleteDomain(gomock.Any(), gomock.Any()).Return(resp, &types.BadRequestError{"mock error"})
-	s.Error(s.app.Run([]string{"", "--do", domainName, "domain", "delete"}))
+	s.serverFrontendClient.EXPECT().DeleteDomain(gomock.Any(), gomock.Any()).Return(&types.BadRequestError{"mock error"})
+
+	defer s.mockStdinInput("Yes")()
+	s.Error(s.app.Run([]string{"", "--do", domainName, "domain", "delete", "--st", "test-token"}))
 }
 
 func (s *cliAppSuite) TestDomainDeprecate() {
