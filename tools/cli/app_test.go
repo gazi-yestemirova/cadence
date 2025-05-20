@@ -203,16 +203,20 @@ var describeDomainResponseServer = &types.DescribeDomainResponse{
 // This is used to mock the domain deletion confirmation
 func (s *cliAppSuite) mockStdinInput(input string) func() {
 	oldStdin := os.Stdin
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	s.Require().NoError(err)
 	os.Stdin = r
 
 	go func() {
-		w.Write([]byte(input + "\n"))
-		w.Close()
+		_, wrErr := w.Write([]byte(input + "\n"))
+		s.Require().NoError(wrErr)
+		err = w.Close()
+		s.Require().NoError(err)
 	}()
 
 	return func() {
 		os.Stdin = oldStdin
+		r.Close()
 	}
 }
 
