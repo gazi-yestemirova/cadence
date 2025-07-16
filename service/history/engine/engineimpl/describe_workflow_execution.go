@@ -156,7 +156,9 @@ func (e *historyEngineImpl) DescribeWorkflowExecution(
 			}
 			if ai.HasRetryPolicy {
 				p.Attempt = ai.Attempt
-				p.ExpirationTimestamp = common.Int64Ptr(ai.ExpirationTime.UnixNano())
+				if !ai.ExpirationTime.IsZero() {
+					p.ExpirationTimestamp = common.Int64Ptr(ai.ExpirationTime.UnixNano())
+				}
 				if ai.MaximumAttempts != 0 {
 					p.MaximumAttempts = ai.MaximumAttempts
 				}
