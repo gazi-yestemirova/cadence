@@ -959,12 +959,12 @@ func (s *contextTestSuite) TestValidateAndUpdateFailoverMarkers_DeprecatedDomain
 	s.mockShardManager.On("UpdateShard", mock.Anything, mock.Anything).Return(nil)
 
 	// adding failover marker
-	domainFailoverVersion += 1
+	domainFailoverVersion++
 	s.NoError(s.context.AddingPendingFailoverMarker(&failoverMarker))
 	s.Require().Len(s.context.shardInfo.PendingFailoverMarkers, 1, "we should have one failover marker saved since the cluster is not active")
 
 	// adding more failover markers
-	domainFailoverVersion += 1
+	domainFailoverVersion++
 	s.NoError(s.context.AddingPendingFailoverMarker(&failoverMarker))
 
 	s.mockResource.DomainCache.EXPECT().GetDomainByID(testDomainID).Return(domainCacheEntryActiveCluster, nil).Times(2)
