@@ -1472,14 +1472,13 @@ func (s *contextImpl) ValidateAndUpdateFailoverMarkers() ([]*types.FailoverMarke
 			return nil, err
 		}
 
-		// Check if the domain is deprecated
-		if domainEntry.GetInfo() != nil && domainEntry.GetInfo().Status == persistence.DomainStatusDeprecated {
-			completedFailoverMarkers[marker] = struct{}{}
-			continue
-		}
-
 		isActive := domainEntry.IsActiveIn(s.GetClusterMetadata().GetCurrentClusterName())
-		if isActive || domainEntry.GetFailoverVersion() > marker.GetFailoverVersion() {
+		domainStatus := domainEntry.GetInfo().Status
+
+		// Drop failover markers if domain is already active in the currentCluster
+		// or domain have been failed over
+		// or domain is deprecated
+		if isActive || domainEntry.GetFailoverVersion() > marker.GetFailoverVersion() || domainStatus == persistence.DomainStatusDeprecated {
 			completedFailoverMarkers[marker] = struct{}{}
 		}
 	}
