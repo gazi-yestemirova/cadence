@@ -1471,6 +1471,16 @@ func (s *contextImpl) ValidateAndUpdateFailoverMarkers() ([]*types.FailoverMarke
 			s.RUnlock()
 			return nil, err
 		}
+
+		// Check if the domain is deprecated
+		if domainEntry.GetInfo() != nil && domainEntry.GetInfo().Status == persistence.DomainStatusDeprecated {
+			s.logger.Info("Domain is deprecated marking failover marker for cleanup",
+				tag.WorkflowDomainName(domainEntry.GetInfo().Name),
+				tag.WorkflowDomainID(marker.GetDomainID()))
+			completedFailoverMarkers[marker] = struct{}{}
+			continue
+		}
+
 		isActive := domainEntry.IsActiveIn(s.GetClusterMetadata().GetCurrentClusterName())
 		if isActive || domainEntry.GetFailoverVersion() > marker.GetFailoverVersion() {
 			completedFailoverMarkers[marker] = struct{}{}
