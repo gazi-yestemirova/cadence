@@ -2400,6 +2400,7 @@ const (
 	// KeyName: system.enableAdminAuthorization
 	// Value type: string ["disabled","shadow","enabled"]
 	// Default value: "disabled"
+	// TODO: https://github.com/uber/cadence/issues/3861
 	EnableAdminAuthorization
 
 	// MatchingShardDistributionMode is the mode of shard distribution for matching, we currently have four modes, we _highly_
