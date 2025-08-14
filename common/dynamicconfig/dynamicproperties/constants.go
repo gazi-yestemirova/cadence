@@ -2396,6 +2396,12 @@ const (
 	EnableAuthorizationV2
 	TasklistLoadBalancerStrategy
 
+	// EnableAdminAuthorization is the key to enable authorization for admin operations, only for extension binary:
+	// KeyName: system.enableAdminAuthorization
+	// Value type: string ["disabled","shadow","enabled"]
+	// Default value: "disabled"
+	EnableAdminAuthorization
+
 	// MatchingShardDistributionMode is the mode of shard distribution for matching, we currently have four modes, we _highly_
 	// recommend using hash_ring while the shard distributor is still in development.
 	//
@@ -4886,6 +4892,11 @@ var StringKeys = map[StringKey]DynamicString{
 		Description:  "TasklistLoadBalancerStrategy is the key for tasklist load balancer strategy",
 		DefaultValue: "weighted", // available options: "random, round-robin, weighted"
 		Filters:      []Filter{DomainName, TaskListName, TaskType},
+	},
+	EnableAdminAuthorization: {
+		KeyName:      "system.enableAdminAuthorization",
+		Description:  "EnableAdminAuthorization is the key to enable authorization for admin operations, only for extension binary:",
+		DefaultValue: "disabled", // available options: "disabled","shadow","enabled"
 	},
 	ReadVisibilityStoreName: {
 		KeyName:      "system.readVisibilityStoreName",
