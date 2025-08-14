@@ -4895,7 +4895,7 @@ var StringKeys = map[StringKey]DynamicString{
 	},
 	EnableAdminAuthorization: {
 		KeyName:      "system.enableAdminAuthorization",
-		Description:  "EnableAdminAuthorization is the key to enable authorization for admin operations, only for extension binary:",
+		Description:  "EnableAdminAuthorization is the key to enable authorization for admin operations, only for extension of authorizer implementation",
 		DefaultValue: "disabled", // available options: "disabled","shadow","enabled"
 	},
 	ReadVisibilityStoreName: {
