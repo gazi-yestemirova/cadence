@@ -745,3 +745,7 @@ func (h *apiHandler) TerminateWorkflowExecution(ctx context.Context, tp1 *types.
 func (h *apiHandler) UpdateDomain(ctx context.Context, up1 *types.UpdateDomainRequest) (up2 *types.UpdateDomainResponse, err error) {
 	return h.wrapped.UpdateDomain(ctx, up1)
 }
+
+func (h *apiHandler) DomainFailover(ctx context.Context, df1 *types.DomainFailoverRequest) (df2 *types.DomainFailoverResponse, err error) {
+	return h.wrapped.DomainFailover(ctx, df1)
+}

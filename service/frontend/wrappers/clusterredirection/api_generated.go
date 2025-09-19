@@ -199,6 +199,45 @@ func (handler *clusterRedirectionHandler) DiagnoseWorkflowExecution(ctx context.
 	return handler.frontendHandler.DiagnoseWorkflowExecution(ctx, dp1)
 }
 
+func (handler *clusterRedirectionHandler) FailoverDomain(ctx context.Context, fp1 *types.FailoverDomainRequest) (fp2 *types.FailoverDomainResponse, err error) {
+	var (
+		apiName                   = "FailoverDomain"
+		cluster                   string
+		requestedConsistencyLevel types.QueryConsistencyLevel = types.QueryConsistencyLevelEventual
+	)
+
+	var domainEntry *cache.DomainCacheEntry
+	scope, startTime := handler.beforeCall(metrics.DCRedirectionFailoverDomainScope)
+	defer func() {
+		handler.afterCall(recover(), scope, startTime, domainEntry, cluster, &err)
+	}()
+
+	domainEntry, err = handler.domainCache.GetDomain(fp1.Domain)
+	if err != nil {
+		return nil, err
+	}
+
+	var actClSelPolicyForNewWF *types.ActiveClusterSelectionPolicy
+	var workflowExecution *types.WorkflowExecution
+
+	err = handler.redirectionPolicy.Redirect(ctx, domainEntry, workflowExecution, actClSelPolicyForNewWF, apiName, requestedConsistencyLevel, func(targetDC string) error {
+		cluster = targetDC
+		switch {
+		case targetDC == handler.currentClusterName:
+			fp2, err = handler.frontendHandler.FailoverDomain(ctx, fp1)
+		default:
+			remoteClient, clientErr := handler.GetRemoteFrontendClient(targetDC)
+			if clientErr != nil {
+				return clientErr
+			}
+			fp2, err = remoteClient.FailoverDomain(ctx, fp1, handler.callOptions...)
+		}
+		return err
+	})
+
+	return fp2, err
+}
+
 func (handler *clusterRedirectionHandler) GetClusterInfo(ctx context.Context) (cp1 *types.ClusterInfo, err error) {
 	return handler.frontendHandler.GetClusterInfo(ctx)
 }

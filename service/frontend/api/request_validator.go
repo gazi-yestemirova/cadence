@@ -52,6 +52,7 @@ type (
 		ValidateRegisterDomainRequest(context.Context, *types.RegisterDomainRequest) error
 		ValidateDescribeDomainRequest(context.Context, *types.DescribeDomainRequest) error
 		ValidateUpdateDomainRequest(context.Context, *types.UpdateDomainRequest) error
+		ValidateFailoverDomainRequest(context.Context, *types.FailoverDomainRequest) error
 		ValidateDeleteDomainRequest(context.Context, *types.DeleteDomainRequest) error
 		ValidateDeprecateDomainRequest(context.Context, *types.DeprecateDomainRequest) error
 	}
@@ -342,6 +343,26 @@ func (v *requestValidatorImpl) ValidateUpdateDomainRequest(ctx context.Context, 
 			return err
 		}
 	}
+	return nil
+}
+
+func (v *requestValidatorImpl) ValidateFailoverDomainRequest(ctx context.Context, failoverRequest *types.FailoverDomainRequest) error {
+	if failoverRequest == nil {
+		return validate.ErrRequestNotSet
+	}
+	if failoverRequest.GetName() == "" {
+		return validate.ErrDomainNotSet
+	}
+
+	if failoverRequest.ActiveClusterName == nil && failoverRequest.ActiveClusters == nil {
+		return &types.BadRequestError{Message: "Either ActiveClusterName or ActiveClusters must be provided for failover the domain"}
+	}
+
+	// Permission is not required for failover request - reject the failover if the cluster is in lockdown
+	if err := checkFailOverPermission(v.config, failoverRequest.GetName()); err != nil {
+		return err
+	}
+
 	return nil
 }
 

@@ -13,9 +13,8 @@ import (
 	context "context"
 	reflect "reflect"
 
-	gomock "go.uber.org/mock/gomock"
-
 	types "github.com/uber/cadence/common/types"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockHandler is a mock of Handler interface.
@@ -83,6 +82,21 @@ func (m *MockHandler) DescribeDomain(ctx context.Context, describeRequest *types
 func (mr *MockHandlerMockRecorder) DescribeDomain(ctx, describeRequest any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeDomain", reflect.TypeOf((*MockHandler)(nil).DescribeDomain), ctx, describeRequest)
+}
+
+// FailoverDomain mocks base method.
+func (m *MockHandler) FailoverDomain(ctx context.Context, failoverRequest *types.FailoverDomainRequest) (*types.FailoverDomainResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FailoverDomain", ctx, failoverRequest)
+	ret0, _ := ret[0].(*types.FailoverDomainResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FailoverDomain indicates an expected call of FailoverDomain.
+func (mr *MockHandlerMockRecorder) FailoverDomain(ctx, failoverRequest any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FailoverDomain", reflect.TypeOf((*MockHandler)(nil).FailoverDomain), ctx, failoverRequest)
 }
 
 // ListDomains mocks base method.

@@ -7338,6 +7338,40 @@ type UpdateDomainRequest struct {
 	FailoverTimeoutInSeconds               *int32                             `json:"failoverTimeoutInSeconds,omitempty"`
 }
 
+// FailoverDomainRequest is the request for domain failover operations
+type FailoverDomainRequest struct {
+	Name                     string                             `json:"name,omitempty"`
+	ActiveClusterName        *string                            `json:"activeClusterName,omitempty"`
+	ActiveClusters           *ActiveClusters                    `json:"activeClusters,omitempty"`
+	Clusters                 []*ClusterReplicationConfiguration `json:"clusters,omitempty"`
+	FailoverTimeoutInSeconds *int32                             `json:"failoverTimeoutInSeconds,omitempty"`
+}
+
+// FailoverDomainResponse is the response for domain failover operations
+type FailoverDomainResponse struct {
+	DomainInfo               *DomainInfo                     `json:"domainInfo,omitempty"`
+	Configuration            *DomainConfiguration            `json:"configuration,omitempty"`
+	ReplicationConfiguration *DomainReplicationConfiguration `json:"replicationConfiguration,omitempty"`
+	FailoverVersion          int64                           `json:"failoverVersion,omitempty"`
+	IsGlobalDomain           bool                            `json:"isGlobalDomain,omitempty"`
+}
+
+// GetName is an internal getter (TBD...)
+func (v *FailoverDomainRequest) GetName() (o string) {
+	if v != nil {
+		return v.Name
+	}
+	return
+}
+
+// GetFailoverTimeoutInSeconds is an internal getter (TBD...)
+func (v *FailoverDomainRequest) GetFailoverTimeoutInSeconds() (o int32) {
+	if v != nil && v.FailoverTimeoutInSeconds != nil {
+		return *v.FailoverTimeoutInSeconds
+	}
+	return
+}
+
 // GetName is an internal getter (TBD...)
 func (v *UpdateDomainRequest) GetName() (o string) {
 	if v != nil {

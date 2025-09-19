@@ -143,6 +143,51 @@ func (wh *WorkflowHandler) UpdateDomain(
 	return resp, nil
 }
 
+// FailoverDomain updates domain replication configurations
+func (wh *WorkflowHandler) FailoverDomain(
+	ctx context.Context,
+	failoverRequest *types.FailoverDomainRequest,
+) (resp *types.FailoverDomainResponse, retError error) {
+	if wh.isShuttingDown() {
+		return nil, validate.ErrShuttingDown
+	}
+	if err := wh.requestValidator.ValidateFailoverDomainRequest(ctx, failoverRequest); err != nil {
+		return nil, err
+	}
+
+	domainName := failoverRequest.GetName()
+	logger := wh.GetLogger().WithTags(
+		tag.WorkflowDomainName(domainName),
+		tag.OperationName("FailoverDomain"))
+
+	isGraceFailover := failoverRequest.FailoverTimeoutInSeconds != nil
+	logger.Info(fmt.Sprintf(
+		"Domain Failover requested. isGraceFailover: %v, Request: %#v.",
+		isGraceFailover,
+		failoverRequest))
+
+	if isGraceFailover {
+		if err := wh.checkOngoingFailover(
+			ctx,
+			&failoverRequest.Name,
+		); err != nil {
+			logger.Error("Graceful domain failover request failed. Not able to check ongoing failovers.",
+				tag.Error(err))
+			return nil, err
+		}
+	}
+
+	failoverResp, err := wh.domainHandler.FailoverDomain(ctx, failoverRequest)
+	if err != nil {
+		logger.Error("Domain failover operation failed.",
+			tag.Error(err))
+		return nil, err
+	}
+
+	logger.Info("Domain failover operation succeeded.")
+	return failoverResp, nil
+}
+
 // DeleteDomain permanently removes a domain record. This operation:
 // - Requires domain to be in DEPRECATED status
 // - Cannot be performed on domains with running workflows

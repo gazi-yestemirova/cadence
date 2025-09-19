@@ -7,9 +7,9 @@ package grpc
 import (
 	"context"
 
-	apiv1 "github.com/uber/cadence-idl/go/proto/api/v1"
 	"go.uber.org/yarpc"
 
+	apiv1 "github.com/uber/cadence-idl/go/proto/api/v1"
 	"github.com/uber/cadence/common/types"
 	"github.com/uber/cadence/common/types/mapper/proto"
 )
@@ -47,6 +47,11 @@ func (g frontendClient) DescribeWorkflowExecution(ctx context.Context, dp1 *type
 func (g frontendClient) DiagnoseWorkflowExecution(ctx context.Context, dp1 *types.DiagnoseWorkflowExecutionRequest, p1 ...yarpc.CallOption) (dp2 *types.DiagnoseWorkflowExecutionResponse, err error) {
 	response, err := g.c.DiagnoseWorkflowExecution(ctx, proto.FromDiagnoseWorkflowExecutionRequest(dp1), p1...)
 	return proto.ToDiagnoseWorkflowExecutionResponse(response), proto.ToError(err)
+}
+
+func (g frontendClient) FailoverDomain(ctx context.Context, fp1 *types.FailoverDomainRequest, p1 ...yarpc.CallOption) (fp2 *types.FailoverDomainResponse, err error) {
+	response, err := g.c.FailoverDomain(ctx, proto.FromFailoverDomainRequest(fp1), p1...)
+	return proto.ToFailoverDomainResponse(response), proto.ToError(err)
 }
 
 func (g frontendClient) GetClusterInfo(ctx context.Context, p1 ...yarpc.CallOption) (cp1 *types.ClusterInfo, err error) {

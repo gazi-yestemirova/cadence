@@ -11,9 +11,10 @@ import (
 	"github.com/uber/cadence/common/config"
 	"github.com/uber/cadence/common/log/tag"
 	"github.com/uber/cadence/common/metrics"
+	"github.com/uber/cadence/service/frontend/api"
+
 	"github.com/uber/cadence/common/resource"
 	"github.com/uber/cadence/common/types"
-	"github.com/uber/cadence/service/frontend/api"
 )
 
 // apiHandler frontend handler wrapper for authentication and authorization
@@ -147,6 +148,10 @@ func (a *apiHandler) DescribeWorkflowExecution(ctx context.Context, dp1 *types.D
 
 func (a *apiHandler) DiagnoseWorkflowExecution(ctx context.Context, dp1 *types.DiagnoseWorkflowExecutionRequest) (dp2 *types.DiagnoseWorkflowExecutionResponse, err error) {
 	return a.handler.DiagnoseWorkflowExecution(ctx, dp1)
+}
+
+func (a *apiHandler) FailoverDomain(ctx context.Context, fp1 *types.FailoverDomainRequest) (fp2 *types.FailoverDomainResponse, err error) {
+	return a.handler.FailoverDomain(ctx, fp1)
 }
 
 func (a *apiHandler) GetClusterInfo(ctx context.Context) (cp1 *types.ClusterInfo, err error) {
