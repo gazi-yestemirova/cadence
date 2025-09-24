@@ -77,10 +77,10 @@ type (
 			ctx context.Context,
 			updateRequest *types.UpdateDomainRequest,
 		) (*types.UpdateDomainResponse, error)
-		UpdateDomainReplicationConfig(
+		FailoverDomain(
 			ctx context.Context,
-			updateReplicationRequest *types.UpdateDomainReplicationConfigRequest,
-		) (*types.UpdateDomainReplicationConfigResponse, error)
+			failoverRequest *types.FailoverDomainRequest,
+		) (*types.FailoverDomainResponse, error)
 		UpdateIsolationGroups(
 			ctx context.Context,
 			updateRequest types.UpdateDomainIsolationGroupsRequest,
@@ -706,11 +706,11 @@ func (d *handlerImpl) UpdateDomain(
 	return response, nil
 }
 
-// UpdateDomainReplicationConfig handles replication configuration updates for the domain
-func (d *handlerImpl) UpdateDomainReplicationConfig(
+// FailoverDomain handles failover of the domain to a different cluster
+func (d *handlerImpl) FailoverDomain(
 	ctx context.Context,
-	updateReplicationRequest *types.UpdateDomainReplicationConfigRequest,
-) (*types.UpdateDomainReplicationConfigResponse, error) {
+	failoverRequest *types.FailoverDomainRequest,
+) (*types.FailoverDomainResponse, error) {
 
 	// must get the metadata (notificationVersion) first
 	// this version can be regarded as the lock on the v2 domain table
@@ -721,7 +721,7 @@ func (d *handlerImpl) UpdateDomainReplicationConfig(
 		return nil, err
 	}
 	notificationVersion := metadata.NotificationVersion
-	getResponse, err := d.domainManager.GetDomain(ctx, &persistence.GetDomainRequest{Name: updateReplicationRequest.GetName()})
+	getResponse, err := d.domainManager.GetDomain(ctx, &persistence.GetDomainRequest{Name: failoverRequest.GetName()})
 	if err != nil {
 		return nil, err
 	}
@@ -741,10 +741,8 @@ func (d *handlerImpl) UpdateDomainReplicationConfig(
 	lastUpdatedTime := time.Unix(0, getResponse.LastUpdatedTime)
 
 	updateRequest := &types.UpdateDomainRequest{
-		Name:                     updateReplicationRequest.Name,
-		ActiveClusterName:        updateReplicationRequest.ActiveClusterName,
-		ActiveClusters:           updateReplicationRequest.ActiveClusters,
-		FailoverTimeoutInSeconds: updateReplicationRequest.FailoverTimeoutInSeconds,
+		Name:           failoverRequest.Name,
+		ActiveClusters: failoverRequest.ActiveClusters,
 	}
 
 	// Update replication config
@@ -948,7 +946,7 @@ func (d *handlerImpl) UpdateDomainReplicationConfig(
 		tag.WorkflowDomainName(info.Name),
 		tag.WorkflowDomainID(info.ID),
 	)
-	return &types.UpdateDomainReplicationConfigResponse{
+	return &types.FailoverDomainResponse{
 		DomainInfo:               domainInfo,
 		Configuration:            configuration,
 		ReplicationConfiguration: replicationConfiguration,

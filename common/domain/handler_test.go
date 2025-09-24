@@ -2453,7 +2453,7 @@ func TestHandler_UpdateDomain(t *testing.T) {
 	}
 }
 
-func TestHandler_UpdateDomainReplicationConfig(t *testing.T) {
+func TestHandler_FailoverDomain(t *testing.T) {
 	ctx := context.Background()
 	maxLength := 1
 
@@ -2461,18 +2461,18 @@ func TestHandler_UpdateDomainReplicationConfig(t *testing.T) {
 		name      string
 		setupMock func(
 			domainManager *persistence.MockDomainManager,
-			updateRequest *types.UpdateDomainReplicationConfigRequest,
+			updateRequest *types.FailoverDomainRequest,
 			archivalMetadata *archiver.MockArchivalMetadata,
 			timeSource clock.MockedTimeSource,
 			domainReplicator *MockReplicator,
 		)
-		request  *types.UpdateDomainReplicationConfigRequest
-		response func(timeSource clock.MockedTimeSource) *types.UpdateDomainReplicationConfigResponse
+		request  *types.FailoverDomainRequest
+		response func(timeSource clock.MockedTimeSource) *types.FailoverDomainResponse
 		err      error
 	}{
 		{
 			name: "Success case - global domain force failover via replication config",
-			setupMock: func(domainManager *persistence.MockDomainManager, updateRequest *types.UpdateDomainReplicationConfigRequest, archivalMetadata *archiver.MockArchivalMetadata, timeSource clock.MockedTimeSource, domainReplicator *MockReplicator) {
+			setupMock: func(domainManager *persistence.MockDomainManager, updateRequest *types.FailoverDomainRequest, archivalMetadata *archiver.MockArchivalMetadata, timeSource clock.MockedTimeSource, domainReplicator *MockReplicator) {
 				domainResponse := &persistence.GetDomainResponse{
 					ReplicationConfig: &persistence.DomainReplicationConfig{
 						ActiveClusterName: cluster.TestCurrentClusterName,
@@ -2523,13 +2523,20 @@ func TestHandler_UpdateDomainReplicationConfig(t *testing.T) {
 						domainResponse.IsGlobalDomain,
 					).Return(nil).Times(1)
 			},
-			request: &types.UpdateDomainReplicationConfigRequest{
-				Name:              constants.TestDomainName,
-				ActiveClusterName: common.Ptr(cluster.TestAlternativeClusterName),
+			request: &types.FailoverDomainRequest{
+				Name: constants.TestDomainName,
+				ActiveClusters: &types.ActiveClusters{
+					ActiveClustersByRegion: map[string]types.ActiveClusterInfo{
+						cluster.TestRegion1: {
+							ActiveClusterName: cluster.TestCurrentClusterName,
+							FailoverVersion:   cluster.TestCurrentClusterInitialFailoverVersion,
+						},
+					},
+				},
 			},
-			response: func(timeSource clock.MockedTimeSource) *types.UpdateDomainReplicationConfigResponse {
+			response: func(timeSource clock.MockedTimeSource) *types.FailoverDomainResponse {
 				data, _ := json.Marshal([]FailoverEvent{{EventTime: timeSource.Now(), FromCluster: cluster.TestCurrentClusterName, ToCluster: cluster.TestAlternativeClusterName, FailoverType: commonconstants.FailoverType(commonconstants.FailoverTypeForce).String()}})
-				return &types.UpdateDomainReplicationConfigResponse{
+				return &types.FailoverDomainResponse{
 					IsGlobalDomain:  true,
 					FailoverVersion: cluster.TestCurrentClusterInitialFailoverVersion/cluster.TestFailoverVersionIncrement*cluster.TestFailoverVersionIncrement + cluster.TestAlternativeClusterInitialFailoverVersion,
 					DomainInfo: &types.DomainInfo{
@@ -2558,7 +2565,7 @@ func TestHandler_UpdateDomainReplicationConfig(t *testing.T) {
 		},
 		{
 			name: "Success case - global domain grace failover via replication config",
-			setupMock: func(domainManager *persistence.MockDomainManager, updateRequest *types.UpdateDomainReplicationConfigRequest, archivalMetadata *archiver.MockArchivalMetadata, timeSource clock.MockedTimeSource, domainReplicator *MockReplicator) {
+			setupMock: func(domainManager *persistence.MockDomainManager, updateRequest *types.FailoverDomainRequest, archivalMetadata *archiver.MockArchivalMetadata, timeSource clock.MockedTimeSource, domainReplicator *MockReplicator) {
 				domainResponse := &persistence.GetDomainResponse{
 					ReplicationConfig: &persistence.DomainReplicationConfig{
 						ActiveClusterName: cluster.TestAlternativeClusterName,
@@ -2610,14 +2617,20 @@ func TestHandler_UpdateDomainReplicationConfig(t *testing.T) {
 						domainResponse.IsGlobalDomain,
 					).Return(nil).Times(1)
 			},
-			request: &types.UpdateDomainReplicationConfigRequest{
-				Name:                     constants.TestDomainName,
-				ActiveClusterName:        common.Ptr(cluster.TestCurrentClusterName),
-				FailoverTimeoutInSeconds: common.Int32Ptr(10),
+			request: &types.FailoverDomainRequest{
+				Name: constants.TestDomainName,
+				ActiveClusters: &types.ActiveClusters{
+					ActiveClustersByRegion: map[string]types.ActiveClusterInfo{
+						cluster.TestRegion1: {
+							ActiveClusterName: cluster.TestCurrentClusterName,
+							FailoverVersion:   cluster.TestCurrentClusterInitialFailoverVersion,
+						},
+					},
+				},
 			},
-			response: func(timeSource clock.MockedTimeSource) *types.UpdateDomainReplicationConfigResponse {
+			response: func(timeSource clock.MockedTimeSource) *types.FailoverDomainResponse {
 				data, _ := json.Marshal([]FailoverEvent{{EventTime: timeSource.Now(), FromCluster: cluster.TestAlternativeClusterName, ToCluster: cluster.TestCurrentClusterName, FailoverType: commonconstants.FailoverType(commonconstants.FailoverTypeGrace).String()}})
-				return &types.UpdateDomainReplicationConfigResponse{
+				return &types.FailoverDomainResponse{
 					IsGlobalDomain:  true,
 					FailoverVersion: cluster.TestFailoverVersionIncrement,
 					DomainInfo: &types.DomainInfo{
@@ -2646,7 +2659,7 @@ func TestHandler_UpdateDomainReplicationConfig(t *testing.T) {
 		},
 		{
 			name: "Success case - active-active replication config update",
-			setupMock: func(domainManager *persistence.MockDomainManager, updateRequest *types.UpdateDomainReplicationConfigRequest, archivalMetadata *archiver.MockArchivalMetadata, timeSource clock.MockedTimeSource, domainReplicator *MockReplicator) {
+			setupMock: func(domainManager *persistence.MockDomainManager, updateRequest *types.FailoverDomainRequest, archivalMetadata *archiver.MockArchivalMetadata, timeSource clock.MockedTimeSource, domainReplicator *MockReplicator) {
 				domainResponse := &persistence.GetDomainResponse{
 					ReplicationConfig: &persistence.DomainReplicationConfig{
 						Clusters: []*persistence.ClusterReplicationConfig{
@@ -2727,7 +2740,7 @@ func TestHandler_UpdateDomainReplicationConfig(t *testing.T) {
 						domainResponse.IsGlobalDomain,
 					).Return(nil).Times(1)
 			},
-			request: &types.UpdateDomainReplicationConfigRequest{
+			request: &types.FailoverDomainRequest{
 				Name: constants.TestDomainName,
 				ActiveClusters: &types.ActiveClusters{
 					ActiveClustersByRegion: map[string]types.ActiveClusterInfo{
@@ -2742,7 +2755,7 @@ func TestHandler_UpdateDomainReplicationConfig(t *testing.T) {
 					},
 				},
 			},
-			response: func(timeSource clock.MockedTimeSource) *types.UpdateDomainReplicationConfigResponse {
+			response: func(timeSource clock.MockedTimeSource) *types.FailoverDomainResponse {
 				data, _ := json.Marshal([]FailoverEvent{{
 					EventTime:    timeSource.Now(),
 					FailoverType: commonconstants.FailoverType(commonconstants.FailoverTypeForce).String(),
@@ -2771,7 +2784,7 @@ func TestHandler_UpdateDomainReplicationConfig(t *testing.T) {
 						},
 					},
 				}})
-				return &types.UpdateDomainReplicationConfigResponse{
+				return &types.FailoverDomainResponse{
 					IsGlobalDomain:  true,
 					FailoverVersion: cluster.TestCurrentClusterInitialFailoverVersion + cluster.TestFailoverVersionIncrement,
 					DomainInfo: &types.DomainInfo{
@@ -2812,20 +2825,27 @@ func TestHandler_UpdateDomainReplicationConfig(t *testing.T) {
 		},
 		{
 			name: "Error case - domain not found",
-			setupMock: func(domainManager *persistence.MockDomainManager, updateRequest *types.UpdateDomainReplicationConfigRequest, archivalMetadata *archiver.MockArchivalMetadata, timeSource clock.MockedTimeSource, domainReplicator *MockReplicator) {
+			setupMock: func(domainManager *persistence.MockDomainManager, updateRequest *types.FailoverDomainRequest, archivalMetadata *archiver.MockArchivalMetadata, timeSource clock.MockedTimeSource, domainReplicator *MockReplicator) {
 				domainManager.EXPECT().GetMetadata(ctx).Return(&persistence.GetMetadataResponse{}, nil).Times(1)
 				domainManager.EXPECT().GetDomain(ctx, &persistence.GetDomainRequest{Name: updateRequest.GetName()}).
 					Return(nil, &types.EntityNotExistsError{Message: "Domain not found"}).Times(1)
 			},
-			request: &types.UpdateDomainReplicationConfigRequest{
-				Name:              constants.TestDomainName,
-				ActiveClusterName: common.Ptr(cluster.TestAlternativeClusterName),
+			request: &types.FailoverDomainRequest{
+				Name: constants.TestDomainName,
+				ActiveClusters: &types.ActiveClusters{
+					ActiveClustersByRegion: map[string]types.ActiveClusterInfo{
+						cluster.TestRegion2: {
+							ActiveClusterName: cluster.TestAlternativeClusterName,
+							FailoverVersion:   cluster.TestAlternativeClusterInitialFailoverVersion,
+						},
+					},
+				},
 			},
 			err: &types.EntityNotExistsError{Message: "Domain not found"},
 		},
 		{
 			name: "Error case - update too frequent",
-			setupMock: func(domainManager *persistence.MockDomainManager, updateRequest *types.UpdateDomainReplicationConfigRequest, archivalMetadata *archiver.MockArchivalMetadata, timeSource clock.MockedTimeSource, domainReplicator *MockReplicator) {
+			setupMock: func(domainManager *persistence.MockDomainManager, updateRequest *types.FailoverDomainRequest, archivalMetadata *archiver.MockArchivalMetadata, timeSource clock.MockedTimeSource, domainReplicator *MockReplicator) {
 				domainResponse := &persistence.GetDomainResponse{
 					ReplicationConfig: &persistence.DomainReplicationConfig{
 						ActiveClusterName: cluster.TestCurrentClusterName,
@@ -2854,9 +2874,16 @@ func TestHandler_UpdateDomainReplicationConfig(t *testing.T) {
 				domainManager.EXPECT().GetDomain(ctx, &persistence.GetDomainRequest{Name: updateRequest.GetName()}).
 					Return(domainResponse, nil).Times(1)
 			},
-			request: &types.UpdateDomainReplicationConfigRequest{
-				Name:              constants.TestDomainName,
-				ActiveClusterName: common.Ptr(cluster.TestAlternativeClusterName),
+			request: &types.FailoverDomainRequest{
+				Name: constants.TestDomainName,
+				ActiveClusters: &types.ActiveClusters{
+					ActiveClustersByRegion: map[string]types.ActiveClusterInfo{
+						cluster.TestRegion2: {
+							ActiveClusterName: cluster.TestAlternativeClusterName,
+							FailoverVersion:   cluster.TestAlternativeClusterInitialFailoverVersion,
+						},
+					},
+				},
 			},
 			err: errDomainUpdateTooFrequent,
 		},
@@ -2897,7 +2924,7 @@ func TestHandler_UpdateDomainReplicationConfig(t *testing.T) {
 
 			tc.setupMock(mockDomainManager, tc.request, mockArchivalMetadata, mockTimeSource, mockReplicator)
 
-			response, err := handler.UpdateDomainReplicationConfig(ctx, tc.request)
+			response, err := handler.FailoverDomain(ctx, tc.request)
 
 			if tc.err != nil {
 				assert.Error(t, err)
