@@ -7405,11 +7405,10 @@ func (v *UpdateDomainResponse) GetIsGlobalDomain() (o bool) {
 
 // UpdateDomainReplicationConfigRequest is the request for domain replication update operations
 type UpdateDomainReplicationConfigRequest struct {
-	Name                     string                             `json:"name,omitempty"`
-	ActiveClusterName        *string                            `json:"activeClusterName,omitempty"`
-	ActiveClusters           *ActiveClusters                    `json:"activeClusters,omitempty"`
-	Clusters                 []*ClusterReplicationConfiguration `json:"clusters,omitempty"`
-	FailoverTimeoutInSeconds *int32                             `json:"failoverTimeoutInSeconds,omitempty"`
+	Name                     string          `json:"name,omitempty"`
+	ActiveClusterName        *string         `json:"activeClusterName,omitempty"`
+	ActiveClusters           *ActiveClusters `json:"activeClusters,omitempty"`
+	FailoverTimeoutInSeconds *int32          `json:"failoverTimeoutInSeconds,omitempty"`
 }
 
 // UpdateDomainReplicationConfigResponse is the response for domain replication update operations

@@ -744,7 +744,6 @@ func (d *handlerImpl) UpdateDomainReplicationConfig(
 		Name:                     updateReplicationRequest.Name,
 		ActiveClusterName:        updateReplicationRequest.ActiveClusterName,
 		ActiveClusters:           updateReplicationRequest.ActiveClusters,
-		Clusters:                 updateReplicationRequest.Clusters,
 		FailoverTimeoutInSeconds: updateReplicationRequest.FailoverTimeoutInSeconds,
 	}
 
