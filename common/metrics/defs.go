@@ -1082,6 +1082,7 @@ const (
 	FrontendGetSearchAttributesScope
 	// FrontendGetClusterInfoScope is the metric scope for frontend.GetClusterInfo
 	FrontendGetClusterInfoScope
+
 	NumFrontendScopes
 )
 
@@ -1526,7 +1527,7 @@ var ScopeDefs = map[ServiceIdx]map[ScopeIdx]scopeDefinition{
 		PersistenceDeleteTaskListScope:                           {operation: "DeleteTaskList"},
 		PersistenceGetTaskListSizeScope:                          {operation: "GetTaskListSize"},
 		PersistenceAppendHistoryEventsScope:                      {operation: "AppendHistoryEvents"},
-		PersistenceGetWorkflowExecutionHistoryScope:              {operation: "GetWorkflowExecutionHistory"},
+		PersistenceGetWorkflowExecutionHistoryScope:              {operation: "GetWorkflowExecutionHistoryy"},
 		PersistenceDeleteWorkflowExecutionHistoryScope:           {operation: "DeleteWorkflowExecutionHistory"},
 		PersistenceCreateDomainScope:                             {operation: "CreateDomain"},
 		PersistenceGetDomainScope:                                {operation: "GetDomain"},

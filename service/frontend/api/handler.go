@@ -1872,6 +1872,9 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 	}
 
 	scope := getMetricsScopeWithDomain(metrics.FrontendGetWorkflowExecutionHistoryScope, getRequest, wh.GetMetricsClient()).Tagged(metrics.GetContextTags(ctx)...)
+
+	scope.UpdateGauge(metrics.WorkflowExecutionHistoryAccess, 250)
+
 	if !getRequest.GetSkipArchival() {
 		enableArchivalRead := wh.GetArchivalMetadata().GetHistoryConfig().ReadEnabled()
 		historyArchived := wh.historyArchived(ctx, getRequest, domainID)
@@ -3301,8 +3304,9 @@ func (wh *WorkflowHandler) emitGetWorkflowExecutionHistoryMetrics(domainName, do
 		metrics.DomainTag(domainName),
 		metrics.WorkflowIDTag(workflowID),
 		metrics.WorkflowCloseStatusTag(workflowCloseStatus),
+		metrics.DomainRetentionDaysTag(retentionDays),
 	)
-	scope.UpdateGauge(metrics.WorkflowExecutionHistoryAccess, float64(retentionDays))
+	scope.UpdateGauge(metrics.WorkflowExecutionHistoryAccess, 1)
 }
 
 // Some error types are introduced later that some clients might not support

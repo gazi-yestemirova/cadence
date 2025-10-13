@@ -1710,6 +1710,13 @@ type DescribeDomainResponse struct {
 	FailoverInfo             *FailoverInfo                   `json:"failoverInfo,omitempty"`
 }
 
+func (v *DomainReplicationConfiguration) GetActiveClusters() (o *ActiveClusters) {
+	if v != nil && v.ActiveClusters != nil {
+		return v.ActiveClusters
+	}
+	return
+}
+
 // GetDomainInfo is an internal getter (TBD...)
 func (v *DescribeDomainResponse) GetDomainInfo() (o *DomainInfo) {
 	if v != nil && v.DomainInfo != nil {
@@ -2253,6 +2260,24 @@ type DomainReplicationConfiguration struct {
 	ActiveClusters    *ActiveClusters                    `json:"activeClusters,omitempty"`
 }
 
+func (v *DomainReplicationConfiguration) IsActiveActive() bool {
+	if v == nil || v.ActiveClusters == nil {
+		return false
+	}
+
+	// Check to see if a ClusterAttribute has been configured for this domain.
+	if len(v.ActiveClusters.AttributeScopes) > 0 {
+		for _, scope := range v.ActiveClusters.AttributeScopes {
+			if len(scope.ClusterAttributes) > 0 {
+				return true
+			}
+		}
+	}
+
+	// TODO(active-active): Remove this once we have completely migrated to ClusterAttributes
+	return len(v.ActiveClusters.ActiveClustersByRegion) > 0
+}
+
 // GetActiveClusterName is an internal getter (TBD...)
 func (v *DomainReplicationConfiguration) GetActiveClusterName() (o string) {
 	if v != nil {
@@ -2265,13 +2290,6 @@ func (v *DomainReplicationConfiguration) GetActiveClusterName() (o string) {
 func (v *DomainReplicationConfiguration) GetClusters() (o []*ClusterReplicationConfiguration) {
 	if v != nil && v.Clusters != nil {
 		return v.Clusters
-	}
-	return
-}
-
-func (v *DomainReplicationConfiguration) GetActiveClusters() (o *ActiveClusters) {
-	if v != nil && v.ActiveClusters != nil {
-		return v.ActiveClusters
 	}
 	return
 }
@@ -2322,6 +2340,47 @@ type ActiveClusters struct {
 
 // DefaultAttributeScopeType is the default scope type for backward compatibility with ActiveClustersByRegion
 const DefaultAttributeScopeType = "region"
+
+type ClusterAttributeNotFoundError struct {
+	ScopeType     string
+	AttributeName string
+}
+
+func (e *ClusterAttributeNotFoundError) Error() string {
+	return fmt.Sprintf("cluster attribute %s not found in scope %s", e.AttributeName, e.ScopeType)
+}
+
+// UndefinedFailoverVersion is used to indicate that a failover version that is not defined.
+// Failover versions are valid for Int64 >= 0
+// and, but implication, 0 is a valid failover version. To distinguish between it and an undefined
+// failover version, we use a negative value.
+const UndefinedFailoverVersion = int64(-1)
+
+// GetFailoverVersionForAttribute returns the failover version for a given attribute.
+// if a value is not found it returns -1 and an error
+func (v *ActiveClusters) GetFailoverVersionForAttribute(scopeType, attributeName string) (int64, error) {
+	if v == nil {
+		return UndefinedFailoverVersion, &ClusterAttributeNotFoundError{
+			ScopeType:     scopeType,
+			AttributeName: attributeName,
+		}
+	}
+	scope, ok := v.AttributeScopes[scopeType]
+	if !ok {
+		return UndefinedFailoverVersion, &ClusterAttributeNotFoundError{
+			ScopeType:     scopeType,
+			AttributeName: attributeName,
+		}
+	}
+	info, ok := scope.ClusterAttributes[attributeName]
+	if !ok {
+		return UndefinedFailoverVersion, &ClusterAttributeNotFoundError{
+			ScopeType:     scopeType,
+			AttributeName: attributeName,
+		}
+	}
+	return info.FailoverVersion, nil
+}
 
 // TODO(c-warren): Remove once refactor to ClusterAttribute is complete
 func (v *ActiveClusters) GetActiveClustersByRegion() map[string]ActiveClusterInfo {
@@ -2529,7 +2588,7 @@ func (v *ClusterAttributeScope) ByteSize() uint64 {
 // ActiveClusterInfo defines failover information for a ClusterAttribute.
 type ActiveClusterInfo struct {
 	ActiveClusterName string `json:"activeClusterName,omitempty" yaml:"activeClusterName,omitempty"`
-	FailoverVersion   int64  `json:"failoverVersion,omitempty" yaml:"failoverVersion,omitempty"`
+	FailoverVersion   int64  `json:"failoverVersion" yaml:"failoverVersion"`
 }
 
 // ByteSize returns the approximate memory used in bytes
