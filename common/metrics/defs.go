@@ -1527,7 +1527,7 @@ var ScopeDefs = map[ServiceIdx]map[ScopeIdx]scopeDefinition{
 		PersistenceDeleteTaskListScope:                           {operation: "DeleteTaskList"},
 		PersistenceGetTaskListSizeScope:                          {operation: "GetTaskListSize"},
 		PersistenceAppendHistoryEventsScope:                      {operation: "AppendHistoryEvents"},
-		PersistenceGetWorkflowExecutionHistoryScope:              {operation: "GetWorkflowExecutionHistoryy"},
+		PersistenceGetWorkflowExecutionHistoryScope:              {operation: "GetWorkflowExecutionHistory"},
 		PersistenceDeleteWorkflowExecutionHistoryScope:           {operation: "DeleteWorkflowExecutionHistory"},
 		PersistenceCreateDomainScope:                             {operation: "CreateDomain"},
 		PersistenceGetDomainScope:                                {operation: "GetDomain"},

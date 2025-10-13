@@ -1872,7 +1872,6 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 	}
 
 	scope := getMetricsScopeWithDomain(metrics.FrontendGetWorkflowExecutionHistoryScope, getRequest, wh.GetMetricsClient()).Tagged(metrics.GetContextTags(ctx)...)
-
 	if !getRequest.GetSkipArchival() {
 		enableArchivalRead := wh.GetArchivalMetadata().GetHistoryConfig().ReadEnabled()
 		historyArchived := wh.historyArchived(ctx, getRequest, domainID)
