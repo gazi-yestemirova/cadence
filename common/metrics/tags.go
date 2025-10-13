@@ -45,6 +45,7 @@ const (
 	taskListType              = "tasklistType"
 	taskListRootPartition     = "tasklist_root_partition"
 	workflowType              = "workflowType"
+	workflowID                = "workflowId"
 	activityType              = "activityType"
 	decisionType              = "decisionType"
 	invariantType             = "invariantType"
@@ -196,6 +197,11 @@ func TaskListRootPartitionTag(value string) Tag {
 // WorkflowTypeTag returns a new workflow type tag.
 func WorkflowTypeTag(value string) Tag {
 	return metricWithUnknown(workflowType, value)
+}
+
+// WorkflowIDTag returns a new workflow ID tag.
+func WorkflowIDTag(value string) Tag {
+	return metricWithUnknown(workflowID, value)
 }
 
 // ActivityTypeTag returns a new activity type tag.

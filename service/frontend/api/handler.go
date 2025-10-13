@@ -1871,7 +1871,11 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 		getRequest.MaximumPageSize = constants.GetHistoryMaxPageSize
 	}
 
-	scope := getMetricsScopeWithDomain(metrics.FrontendGetWorkflowExecutionHistoryScope, getRequest, wh.GetMetricsClient()).Tagged(metrics.GetContextTags(ctx)...)
+	scope := getMetricsScopeWithDomain(metrics.FrontendGetWorkflowExecutionHistoryScope, getRequest, wh.GetMetricsClient()).Tagged(
+		metrics.GetContextTags(ctx)...,
+	).Tagged(
+		metrics.WorkflowIDTag(getRequest.Execution.GetWorkflowID()),
+	)
 	if !getRequest.GetSkipArchival() {
 		enableArchivalRead := wh.GetArchivalMetadata().GetHistoryConfig().ReadEnabled()
 		historyArchived := wh.historyArchived(ctx, getRequest, domainID)
@@ -1915,6 +1919,14 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 			return nil, "", 0, 0, false, nil, fmt.Errorf("failed to get the current version from the response from history: %w", err)
 		}
 
+		closeStatus := persistence.ToInternalWorkflowExecutionCloseStatus(int(response.GetWorkflowCloseState()))
+		closeStatusStr := "NONE"
+		if closeStatus != nil {
+			closeStatusStr = closeStatus.String()
+		}
+		scope.Tagged(metrics.DomainTag(domainName), metrics.WorkflowCloseStatusTag(closeStatusStr))
+		scope.UpdateGauge(metrics.WorkflowExecutionHistoryAccess, 1)
+
 		lastVersionHistoryItem, err := currentVersionHistory.GetLastItem()
 		if err != nil {
 			return nil, "", 0, 0, false, nil, err
@@ -1952,6 +1964,13 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 
 		execution.RunID = token.RunID
 
+		// Add workflow status tag from token
+		workflowStatusFromToken := "running"
+		if !token.IsWorkflowRunning {
+			workflowStatusFromToken = "closed"
+		}
+		scope = scope.Tagged(metrics.WorkflowCloseStatusTag(workflowStatusFromToken))
+
 		// we need to update the current next event ID and whether workflow is running
 		if len(token.PersistenceToken) == 0 && isLongPoll && token.IsWorkflowRunning {
 			logger := wh.GetLogger().WithTags(
@@ -1977,6 +1996,13 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 			token.FirstEventID = token.NextEventID
 			token.NextEventID = nextEventID
 			token.IsWorkflowRunning = isWorkflowRunning
+
+			// Add workflow status tag to scope after we know if workflow is running or closed
+			workflowStatusForScope := "running"
+			if !isWorkflowRunning {
+				workflowStatusForScope = "closed"
+			}
+			scope = scope.Tagged(metrics.WorkflowCloseStatusTag(workflowStatusForScope))
 		}
 	} else {
 		if !isCloseEventOnly {
@@ -1995,6 +2021,13 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 		token.NextEventID = nextEventID
 		token.IsWorkflowRunning = isWorkflowRunning
 		token.PersistenceToken = nil
+
+		// Add workflow status tag to scope after we know if workflow is running or closed
+		workflowStatusForScope := "running"
+		if !isWorkflowRunning {
+			workflowStatusForScope = "closed"
+		}
+		scope = scope.Tagged(metrics.WorkflowCloseStatusTag(workflowStatusForScope))
 	}
 
 	call := yarpc.CallFromContext(ctx)
@@ -2088,6 +2121,13 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 	if err != nil {
 		return nil, err
 	}
+
+	workflowStatus := "running"
+	if !isWorkflowRunning {
+		workflowStatus = "closed"
+	}
+	wh.emitGetWorkflowExecutionHistoryMetrics(domainName, domainID, execution.GetWorkflowID(), workflowStatus)
+
 	return &types.GetWorkflowExecutionHistoryResponse{
 		History:       history,
 		RawHistory:    historyBlob,
@@ -3274,6 +3314,28 @@ func (wh *WorkflowHandler) emitDescribeWorkflowExecutionMetrics(domain string, r
 
 	scope = scope.Tagged(metrics.WorkflowCloseStatusTag(status))
 	scope.IncCounter(metrics.DescribeWorkflowStatusCount)
+}
+
+func (wh *WorkflowHandler) emitGetWorkflowExecutionHistoryMetrics(domainName, domainID, workflowID, workflowStatus string) {
+	// Get domain entry to retrieve retention days
+	domainEntry, err := wh.GetDomainCache().GetDomainByID(domainID)
+	if err != nil {
+		wh.GetLogger().Warn("Failed to get domain entry for metrics", tag.WorkflowDomainName(domainName), tag.Error(err))
+		return
+	}
+
+	// Get retention days for this workflow (respects domain retention sampling)
+	retentionDays := domainEntry.GetRetentionDays(workflowID)
+
+	// Emit retention days metric with workflow metadata tags
+	scope := wh.GetMetricsClient().Scope(
+		metrics.FrontendGetWorkflowExecutionHistoryScope,
+		metrics.DomainTag(domainName),
+		metrics.WorkflowIDTag(workflowID),
+		metrics.WorkflowCloseStatusTag(workflowStatus),
+	)
+
+	scope.UpdateGauge(metrics.WorkflowRetentionDaysRemaining, float64(retentionDays))
 }
 
 // Some error types are introduced later that some clients might not support
