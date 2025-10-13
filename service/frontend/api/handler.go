@@ -1871,11 +1871,7 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 		getRequest.MaximumPageSize = constants.GetHistoryMaxPageSize
 	}
 
-	scope := getMetricsScopeWithDomain(metrics.FrontendGetWorkflowExecutionHistoryScope, getRequest, wh.GetMetricsClient()).Tagged(
-		metrics.GetContextTags(ctx)...,
-	).Tagged(
-		metrics.WorkflowIDTag(getRequest.Execution.GetWorkflowID()),
-	)
+	scope := getMetricsScopeWithDomain(metrics.FrontendGetWorkflowExecutionHistoryScope, getRequest, wh.GetMetricsClient()).Tagged(metrics.GetContextTags(ctx)...)
 	if !getRequest.GetSkipArchival() {
 		enableArchivalRead := wh.GetArchivalMetadata().GetHistoryConfig().ReadEnabled()
 		historyArchived := wh.historyArchived(ctx, getRequest, domainID)
@@ -1964,13 +1960,6 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 
 		execution.RunID = token.RunID
 
-		// Add workflow status tag from token
-		workflowStatusFromToken := "running"
-		if !token.IsWorkflowRunning {
-			workflowStatusFromToken = "closed"
-		}
-		scope = scope.Tagged(metrics.WorkflowCloseStatusTag(workflowStatusFromToken))
-
 		// we need to update the current next event ID and whether workflow is running
 		if len(token.PersistenceToken) == 0 && isLongPoll && token.IsWorkflowRunning {
 			logger := wh.GetLogger().WithTags(
@@ -1996,13 +1985,6 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 			token.FirstEventID = token.NextEventID
 			token.NextEventID = nextEventID
 			token.IsWorkflowRunning = isWorkflowRunning
-
-			// Add workflow status tag to scope after we know if workflow is running or closed
-			workflowStatusForScope := "running"
-			if !isWorkflowRunning {
-				workflowStatusForScope = "closed"
-			}
-			scope = scope.Tagged(metrics.WorkflowCloseStatusTag(workflowStatusForScope))
 		}
 	} else {
 		if !isCloseEventOnly {
@@ -2021,13 +2003,6 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 		token.NextEventID = nextEventID
 		token.IsWorkflowRunning = isWorkflowRunning
 		token.PersistenceToken = nil
-
-		// Add workflow status tag to scope after we know if workflow is running or closed
-		workflowStatusForScope := "running"
-		if !isWorkflowRunning {
-			workflowStatusForScope = "closed"
-		}
-		scope = scope.Tagged(metrics.WorkflowCloseStatusTag(workflowStatusForScope))
 	}
 
 	call := yarpc.CallFromContext(ctx)
