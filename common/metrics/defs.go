@@ -1082,7 +1082,6 @@ const (
 	FrontendGetSearchAttributesScope
 	// FrontendGetClusterInfoScope is the metric scope for frontend.GetClusterInfo
 	FrontendGetClusterInfoScope
-	FrontendWorkflowExecutionHistoryAccess
 	NumFrontendScopes
 )
 
@@ -2431,8 +2430,6 @@ const (
 	NumCommonMetrics // Needs to be last on this list for iota numbering
 	// WorkflowExecutionHistoryAccess tracks the access to the workflow history
 	WorkflowExecutionHistoryAccess
-	// WorkflowRetentionDaysRemaining tracks the days remaining until workflow history retention expires
-	WorkflowRetentionDaysRemaining
 )
 
 // History Metrics enum
@@ -3225,7 +3222,6 @@ var MetricDefs = map[ServiceIdx]map[MetricIdx]metricDefinition{
 		RingResolverError: {metricName: "ring_resolver_error", metricType: Counter},
 
 		WorkflowExecutionHistoryAccess: {metricName: "workflow_execution_history_access", metricType: Gauge},
-		WorkflowRetentionDaysRemaining: {metricName: "workflow_retention_days_remaining", metricType: Gauge},
 	},
 	History: {
 		TaskRequests:                     {metricName: "task_requests", metricType: Counter},

@@ -1916,12 +1916,10 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 			return nil, "", 0, 0, false, nil, "", fmt.Errorf("failed to get the current version from the response from history: %w", err)
 		}
 
-		closeStatus := persistence.ToInternalWorkflowExecutionCloseStatus(int(response.GetWorkflowCloseState()))
-		closeStatusStr := "NONE"
-		if closeStatus != nil {
-			closeStatusStr = closeStatus.String()
+		wfCloseStatus := "Running"
+		if !isWorkflowRunning {
+			wfCloseStatus = persistence.ToInternalWorkflowExecutionCloseStatus(int(response.GetWorkflowCloseState())).String()
 		}
-		scope.Tagged(metrics.DomainTag(domainName), metrics.WorkflowCloseStatusTag(closeStatusStr)).UpdateGauge(metrics.WorkflowExecutionHistoryAccess, 1)
 
 		lastVersionHistoryItem, err := currentVersionHistory.GetLastItem()
 		if err != nil {
@@ -1934,7 +1932,7 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 			response.GetNextEventID(),
 			isWorkflowRunning,
 			lastVersionHistoryItem.ToInternalType(),
-			closeStatusStr,
+			wfCloseStatus,
 			nil
 	}
 
@@ -3304,7 +3302,7 @@ func (wh *WorkflowHandler) emitGetWorkflowExecutionHistoryMetrics(domainName, do
 		metrics.WorkflowIDTag(workflowID),
 		metrics.WorkflowCloseStatusTag(workflowCloseStatus),
 	)
-	scope.UpdateGauge(metrics.WorkflowRetentionDaysRemaining, float64(retentionDays))
+	scope.UpdateGauge(metrics.WorkflowExecutionHistoryAccess, float64(retentionDays))
 }
 
 // Some error types are introduced later that some clients might not support
