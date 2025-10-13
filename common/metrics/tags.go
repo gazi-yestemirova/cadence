@@ -141,7 +141,7 @@ func DomainUnknownTag() Tag {
 
 // DomainRetentionDaysTag returns a new retention days tag for a domain.
 func DomainRetentionDaysTag(value int32) Tag {
-	return simpleMetric{key: isActiveActiveDomain, value: strconv.Itoa(int(value))}
+	return simpleMetric{key: retentionDays, value: strconv.Itoa(int(value))}
 }
 
 // ClusterGroupTag return a new cluster group tag
