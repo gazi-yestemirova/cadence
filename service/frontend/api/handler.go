@@ -1946,6 +1946,7 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 	var nextEventID int64
 	var isWorkflowRunning bool
 	var workflowCloseStatus string
+	var workflowCloseTime *time.Time
 
 	// process the token for paging
 	queryNextEventID := constants.EndEventID
@@ -2097,7 +2098,17 @@ func (wh *WorkflowHandler) GetWorkflowExecutionHistory(
 		return nil, err
 	}
 
-	wh.emitGetWorkflowExecutionHistoryMetrics(domainName, domainID, execution.GetWorkflowID(), workflowCloseStatus)
+	// Extract close time from history events for closed workflows
+	if !isWorkflowRunning && len(history.Events) > 0 {
+		// Get the last event (close event) timestamp
+		lastEvent := history.Events[len(history.Events)-1]
+		if lastEvent.Timestamp != nil {
+			t := time.Unix(0, *lastEvent.Timestamp)
+			workflowCloseTime = &t
+		}
+	}
+
+	wh.emitGetWorkflowExecutionHistoryMetrics(domainName, domainID, execution.GetWorkflowID(), workflowCloseStatus, workflowCloseTime)
 
 	return &types.GetWorkflowExecutionHistoryResponse{
 		History:       history,
@@ -3287,7 +3298,7 @@ func (wh *WorkflowHandler) emitDescribeWorkflowExecutionMetrics(domain string, r
 	scope.IncCounter(metrics.DescribeWorkflowStatusCount)
 }
 
-func (wh *WorkflowHandler) emitGetWorkflowExecutionHistoryMetrics(domainName, domainID, workflowID, workflowCloseStatus string) {
+func (wh *WorkflowHandler) emitGetWorkflowExecutionHistoryMetrics(domainName, domainID, workflowID, workflowCloseStatus string, closeTime *time.Time) {
 	domainEntry, err := wh.GetDomainCache().GetDomainByID(domainID)
 	if err != nil {
 		wh.GetLogger().Warn("Failed to get domain entry for metrics", tag.WorkflowDomainName(domainName), tag.Error(err))
@@ -3299,11 +3310,20 @@ func (wh *WorkflowHandler) emitGetWorkflowExecutionHistoryMetrics(domainName, do
 	scope := wh.GetMetricsClient().Scope(
 		metrics.FrontendGetWorkflowExecutionHistoryScope,
 		metrics.DomainTag(domainName),
-		metrics.WorkflowIDTag(workflowID),
 		metrics.WorkflowCloseStatusTag(workflowCloseStatus),
-		metrics.DomainRetentionDaysTag(retentionDays),
 	)
-	scope.UpdateGauge(metrics.WorkflowExecutionHistoryAccess, 1)
+
+	// For closed workflows with close time, calculate days remaining until retention expires
+	// For running workflows emitting the retention days value
+	metricValue := float64(retentionDays)
+	if closeTime != nil {
+		// (closeTime + retentionDays) - now = days remaining
+		retentionExpiry := closeTime.Add(time.Duration(retentionDays) * 24 * time.Hour)
+		daysRemaining := time.Until(retentionExpiry).Hours() / 24
+		metricValue = daysRemaining
+	}
+
+	scope.UpdateGauge(metrics.WorkflowExecutionHistoryAccess, metricValue)
 }
 
 // Some error types are introduced later that some clients might not support

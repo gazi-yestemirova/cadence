@@ -205,11 +205,6 @@ func WorkflowTypeTag(value string) Tag {
 	return metricWithUnknown(workflowType, value)
 }
 
-// WorkflowIDTag returns a new workflow ID tag.
-func WorkflowIDTag(value string) Tag {
-	return metricWithUnknown(workflowID, value)
-}
-
 // ActivityTypeTag returns a new activity type tag.
 func ActivityTypeTag(value string) Tag {
 	return metricWithUnknown(activityType, value)
