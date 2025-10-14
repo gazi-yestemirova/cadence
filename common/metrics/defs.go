@@ -2428,9 +2428,10 @@ const (
 
 	RingResolverError
 
-	NumCommonMetrics // Needs to be last on this list for iota numbering
 	// WorkflowExecutionHistoryAccess tracks the access to the workflow history
 	WorkflowExecutionHistoryAccess
+
+	NumCommonMetrics // Needs to be last on this list for iota numbering
 )
 
 // History Metrics enum
