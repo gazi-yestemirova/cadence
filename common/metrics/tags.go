@@ -45,7 +45,6 @@ const (
 	taskListType              = "tasklistType"
 	taskListRootPartition     = "tasklist_root_partition"
 	workflowType              = "workflowType"
-	workflowID                = "workflowId"
 	activityType              = "activityType"
 	decisionType              = "decisionType"
 	invariantType             = "invariantType"
@@ -72,7 +71,6 @@ const (
 	mode                      = "mode"
 	isRetry                   = "is_retry"
 	queryConsistencyLevel     = "query_consistency_level"
-	retentionDays             = "retention_days"
 
 	// limiter-side tags
 	globalRatelimitKey            = "global_ratelimit_key"
@@ -137,11 +135,6 @@ func DomainTypeTag(isGlobal bool) Tag {
 // DomainUnknownTag returns a new domain:unknown tag-value
 func DomainUnknownTag() Tag {
 	return DomainTag("")
-}
-
-// DomainRetentionDaysTag returns a new retention days tag for a domain.
-func DomainRetentionDaysTag(value int32) Tag {
-	return simpleMetric{key: retentionDays, value: strconv.Itoa(int(value))}
 }
 
 // ClusterGroupTag return a new cluster group tag
