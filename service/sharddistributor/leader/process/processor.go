@@ -316,15 +316,6 @@ func (p *namespaceProcessor) rebalanceShardsImpl(ctx context.Context, metricsLoo
 
 	p.addAssignmentsToNamespaceState(namespaceState, currentAssignments)
 
-	totalActiveShards := 0
-	for _, shards := range currentAssignments {
-		totalActiveShards += len(shards)
-	}
-	metricsLoopScope.Tagged(
-		metrics.NamespaceTag(p.namespaceCfg.Name),
-		metrics.NamespaceTypeTag(p.namespaceCfg.Type),
-	).UpdateGauge(metrics.ShardDistributorActiveShards, float64(totalActiveShards))
-
 	p.logger.Info("Applying new shard distribution.")
 	// Use the leader guard for the assign operation.
 	err = p.shardStore.AssignShards(ctx, p.namespaceCfg.Name, store.AssignShardsRequest{
@@ -333,6 +324,15 @@ func (p *namespaceProcessor) rebalanceShardsImpl(ctx context.Context, metricsLoo
 	if err != nil {
 		return fmt.Errorf("assign shards: %w", err)
 	}
+
+	totalActiveShards := 0
+	for _, assignedState := range namespaceState.ShardAssignments {
+		totalActiveShards += len(assignedState.AssignedShards)
+	}
+	metricsLoopScope.Tagged(
+		metrics.NamespaceTag(p.namespaceCfg.Name),
+		metrics.NamespaceTypeTag(p.namespaceCfg.Type),
+	).UpdateGauge(metrics.ShardDistributorActiveShards, float64(totalActiveShards))
 
 	return nil
 }
