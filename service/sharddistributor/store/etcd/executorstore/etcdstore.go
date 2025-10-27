@@ -128,12 +128,19 @@ func (s *executorStoreImpl) RecordHeartbeat(ctx context.Context, namespace, exec
 		return fmt.Errorf("compress state: %w", err)
 	}
 
-	// Atomically update both the timestamp and the state.
-	_, err = s.client.Txn(ctx).Then(
+	// Build all operations including metadata
+	ops := []clientv3.Op{
 		clientv3.OpPut(heartbeatETCDKey, strconv.FormatInt(request.LastHeartbeat, 10)),
 		clientv3.OpPut(stateETCDKey, string(compressedState)),
 		clientv3.OpPut(reportedShardsETCDKey, string(compressedReportedShards)),
-	).Commit()
+	}
+	for key, value := range request.Metadata {
+		metadataKey := etcdkeys.BuildMetadataKey(s.prefix, namespace, executorID, key)
+		ops = append(ops, clientv3.OpPut(metadataKey, value))
+	}
+
+	// Atomically update both the timestamp and the state.
+	_, err = s.client.Txn(ctx).Then(ops...).Commit()
 
 	if err != nil {
 		return fmt.Errorf("record heartbeat: %w", err)
