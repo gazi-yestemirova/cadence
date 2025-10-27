@@ -1,4 +1,4 @@
-package executorstore
+package common
 
 import (
 	"encoding/json"
@@ -7,19 +7,20 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uber/cadence/common/log/testlogger"
 	"github.com/uber/cadence/common/types"
 )
 
 func TestCompressDecompress(t *testing.T) {
 	original := []byte(`{"status":"ACTIVE","shards":["shard1","shard2"]}`)
 
-	compressed, err := compress(original)
+	compressed, err := Compress(original)
 	require.NoError(t, err)
 	require.NotNil(t, compressed)
 
 	assert.NotEqual(t, original, compressed)
 
-	decompressed, err := decompress(compressed)
+	decompressed, err := Decompress(compressed)
 	require.NoError(t, err)
 	assert.Equal(t, original, decompressed)
 }
@@ -28,7 +29,7 @@ func TestDecompressBackwardCompatibility(t *testing.T) {
 	t.Run("Old uncompressed data", func(t *testing.T) {
 		oldData := []byte(`{"status":"ACTIVE"}`)
 
-		result, err := decompress(oldData)
+		result, err := Decompress(oldData)
 		require.NoError(t, err)
 		assert.Equal(t, oldData, result, "Old uncompressed data should be returned as-is")
 
@@ -40,10 +41,10 @@ func TestDecompressBackwardCompatibility(t *testing.T) {
 
 	t.Run("New compressed data", func(t *testing.T) {
 		original := []byte(`{"status":"DRAINING"}`)
-		compressed, err := compress(original)
+		compressed, err := Compress(original)
 		require.NoError(t, err)
 
-		result, err := decompress(compressed)
+		result, err := Decompress(compressed)
 		require.NoError(t, err)
 		assert.Equal(t, original, result)
 
@@ -59,12 +60,13 @@ func TestDecompressAndUnmarshalBackwardCompatibility(t *testing.T) {
 		Status string   `json:"status"`
 		Shards []string `json:"shards"`
 	}
+	logger := testlogger.New(t)
 
 	t.Run("Old uncompressed JSON", func(t *testing.T) {
 		oldData := []byte(`{"status":"ACTIVE","shards":["shard1","shard2"]}`)
 
 		var result testData
-		err := decompressAndUnmarshal(oldData, &result, "test data")
+		err := DecompressAndUnmarshal(oldData, &result, "test data", logger)
 		require.NoError(t, err)
 		assert.Equal(t, "ACTIVE", result.Status)
 		assert.Equal(t, []string{"shard1", "shard2"}, result.Shards)
@@ -76,11 +78,11 @@ func TestDecompressAndUnmarshalBackwardCompatibility(t *testing.T) {
 			Shards: []string{"shard3", "shard4"},
 		}
 		originalJSON, _ := json.Marshal(original)
-		compressed, err := compress(originalJSON)
+		compressed, err := Compress(originalJSON)
 		require.NoError(t, err)
 
 		var result testData
-		err = decompressAndUnmarshal(compressed, &result, "test data")
+		err = DecompressAndUnmarshal(compressed, &result, "test data", logger)
 		require.NoError(t, err)
 		assert.Equal(t, original.Status, result.Status)
 		assert.Equal(t, original.Shards, result.Shards)
@@ -90,17 +92,17 @@ func TestDecompressAndUnmarshalBackwardCompatibility(t *testing.T) {
 		invalidJSON := []byte(`{invalid json}`)
 
 		var result testData
-		err := decompressAndUnmarshal(invalidJSON, &result, "test data")
+		err := DecompressAndUnmarshal(invalidJSON, &result, "test data", logger)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unmarshal test data")
 	})
 }
 
 func TestCompressedActiveStatus(t *testing.T) {
-	compressed := compressedActiveStatus()
+	compressed := CompressedActiveStatus()
 	require.NotEmpty(t, compressed)
 
-	decompressed, err := decompress([]byte(compressed))
+	decompressed, err := Decompress([]byte(compressed))
 	require.NoError(t, err)
 
 	var status types.ExecutorStatus

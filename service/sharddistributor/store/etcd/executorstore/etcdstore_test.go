@@ -15,6 +15,7 @@ import (
 	"github.com/uber/cadence/common/types"
 	"github.com/uber/cadence/service/sharddistributor/store"
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/etcdkeys"
+	"github.com/uber/cadence/service/sharddistributor/store/etcd/executorstore/common"
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/leaderstore"
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/testhelper"
 )
@@ -63,7 +64,7 @@ func TestRecordHeartbeat(t *testing.T) {
 	resp, err = tc.Client.Get(ctx, stateKey)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), resp.Count, "State key should exist")
-	decompressedState, err := decompress(resp.Kvs[0].Value)
+	decompressedState, err := common.Decompress(resp.Kvs[0].Value)
 	require.NoError(t, err)
 	assert.Equal(t, stringStatus(types.ExecutorStatusACTIVE), string(decompressedState))
 
@@ -71,7 +72,7 @@ func TestRecordHeartbeat(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(1), resp.Count, "Reported shards key should exist")
 
-	decompressedReportedShards, err := decompress(resp.Kvs[0].Value)
+	decompressedReportedShards, err := common.Decompress(resp.Kvs[0].Value)
 	require.NoError(t, err)
 	var reportedShards map[string]*types.ShardStatusReport
 	err = json.Unmarshal(decompressedReportedShards, &reportedShards)
@@ -373,7 +374,7 @@ func TestSubscribe(t *testing.T) {
 	// Now update the reported shards, which IS a significant change
 	reportedShardsKey, err := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, "reported_shards")
 	require.NoError(t, err)
-	compressedShards, err := compress([]byte(`{"shard-1":{"status":"running"}}`))
+	compressedShards, err := common.Compress([]byte(`{"shard-1":{"status":"running"}}`))
 	require.NoError(t, err)
 	_, err = tc.Client.Put(ctx, reportedShardsKey, string(compressedShards))
 	require.NoError(t, err)
