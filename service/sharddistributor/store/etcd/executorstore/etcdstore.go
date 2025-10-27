@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/golang/snappy"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/fx"
 
@@ -23,26 +22,6 @@ import (
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/etcdkeys"
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/executorstore/shardcache"
 )
-
-var (
-	_executorStatusRunningJSON           = fmt.Sprintf(`"%s"`, types.ExecutorStatusACTIVE)
-	_executorStatusRunningJSONCompressed string
-)
-
-func init() {
-	compressed, _ := compressJSON([]byte(_executorStatusRunningJSON))
-	_executorStatusRunningJSONCompressed = string(compressed)
-}
-
-// compressJSON compresses JSON data using snappy compression
-func compressJSON(data []byte) ([]byte, error) {
-	return snappy.Encode(nil, data), nil
-}
-
-// decompressJSON decompresses snappy-compressed data
-func decompressJSON(data []byte) ([]byte, error) {
-	return snappy.Decode(nil, data)
-}
 
 type executorStoreImpl struct {
 	client     *clientv3.Client
@@ -139,12 +118,12 @@ func (s *executorStoreImpl) RecordHeartbeat(ctx context.Context, namespace, exec
 	}
 
 	// Compress data before writing to etcd
-	compressedReportedShards, err := compressJSON(reportedShardsData)
+	compressedReportedShards, err := compress(reportedShardsData)
 	if err != nil {
 		return fmt.Errorf("compress reported shards: %w", err)
 	}
 
-	compressedState, err := compressJSON(jsonState)
+	compressedState, err := compress(jsonState)
 	if err != nil {
 		return fmt.Errorf("compress state: %w", err)
 	}
@@ -199,31 +178,16 @@ func (s *executorStoreImpl) GetHeartbeat(ctx context.Context, namespace string, 
 			}
 			heartbeatState.LastHeartbeat = timestamp
 		case etcdkeys.ExecutorStatusKey:
-			decompressed, err := decompressJSON(kv.Value)
-			if err != nil {
-				return nil, nil, fmt.Errorf("decompress heartbeat state: %w", err)
-			}
-			err = json.Unmarshal(decompressed, &heartbeatState.Status)
-			if err != nil {
-				return nil, nil, fmt.Errorf("parse heartbeat state: %w", err)
+			if err := decompressAndUnmarshal(kv.Value, &heartbeatState.Status, "heartbeat state"); err != nil {
+				return nil, nil, err
 			}
 		case etcdkeys.ExecutorReportedShardsKey:
-			decompressed, err := decompressJSON(kv.Value)
-			if err != nil {
-				return nil, nil, fmt.Errorf("decompress reported shards: %w", err)
-			}
-			err = json.Unmarshal(decompressed, &heartbeatState.ReportedShards)
-			if err != nil {
-				return nil, nil, fmt.Errorf("unmarshal reported shards: %w", err)
+			if err := decompressAndUnmarshal(kv.Value, &heartbeatState.ReportedShards, "reported shards"); err != nil {
+				return nil, nil, err
 			}
 		case etcdkeys.ExecutorAssignedStateKey:
-			decompressed, err := decompressJSON(kv.Value)
-			if err != nil {
-				return nil, nil, fmt.Errorf("decompress assigned state: %w", err)
-			}
-			err = json.Unmarshal(decompressed, &assignedState)
-			if err != nil {
-				return nil, nil, fmt.Errorf("unmarshal assigned shards: %w", err)
+			if err := decompressAndUnmarshal(kv.Value, &assignedState, "assigned state"); err != nil {
+				return nil, nil, err
 			}
 		}
 	}
@@ -262,31 +226,16 @@ func (s *executorStoreImpl) GetState(ctx context.Context, namespace string) (*st
 			timestamp, _ := strconv.ParseInt(value, 10, 64)
 			heartbeat.LastHeartbeat = timestamp
 		case etcdkeys.ExecutorStatusKey:
-			decompressed, err := decompressJSON(kv.Value)
-			if err != nil {
-				return nil, fmt.Errorf("decompress heartbeat state: %w", err)
-			}
-			err = json.Unmarshal(decompressed, &heartbeat.Status)
-			if err != nil {
-				return nil, fmt.Errorf("parse heartbeat state: %w", err)
+			if err := decompressAndUnmarshal(kv.Value, &heartbeat.Status, "heartbeat state"); err != nil {
+				return nil, err
 			}
 		case etcdkeys.ExecutorReportedShardsKey:
-			decompressed, err := decompressJSON(kv.Value)
-			if err != nil {
-				return nil, fmt.Errorf("decompress reported shards: %w", err)
-			}
-			err = json.Unmarshal(decompressed, &heartbeat.ReportedShards)
-			if err != nil {
-				return nil, fmt.Errorf("unmarshal reported shards: %w", err)
+			if err := decompressAndUnmarshal(kv.Value, &heartbeat.ReportedShards, "reported shards"); err != nil {
+				return nil, err
 			}
 		case etcdkeys.ExecutorAssignedStateKey:
-			decompressed, err := decompressJSON(kv.Value)
-			if err != nil {
-				return nil, fmt.Errorf("decompress assigned state: %w", err)
-			}
-			err = json.Unmarshal(decompressed, &assigned)
-			if err != nil {
-				return nil, fmt.Errorf("unmarshal assigned shards: %w", err)
+			if err := decompressAndUnmarshal(kv.Value, &assigned, "assigned state"); err != nil {
+				return nil, err
 			}
 			assigned.ModRevision = kv.ModRevision
 		}
@@ -358,7 +307,7 @@ func (s *executorStoreImpl) AssignShards(ctx context.Context, namespace string, 
 		if err != nil {
 			return fmt.Errorf("marshal assigned shards for executor %s: %w", executorID, err)
 		}
-		compressedValue, err := compressJSON(value)
+		compressedValue, err := compress(value)
 		if err != nil {
 			return fmt.Errorf("compress assigned shards for executor %s: %w", executorID, err)
 		}
@@ -441,12 +390,8 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 			// If the executor already has shards, load its state.
 			kv := resp.Kvs[0]
 			modRevision = kv.ModRevision
-			decompressed, err := decompressJSON(kv.Value)
-			if err != nil {
-				return fmt.Errorf("decompress assigned state: %w", err)
-			}
-			if err := json.Unmarshal(decompressed, &state); err != nil {
-				return fmt.Errorf("unmarshal assigned state: %w", err)
+			if err := decompressAndUnmarshal(kv.Value, &state, "assigned state"); err != nil {
+				return err
 			}
 		} else {
 			// If this is the first shard, initialize the state map.
@@ -463,7 +408,7 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 			return fmt.Errorf("marshal new assigned state: %w", err)
 		}
 
-		compressedStateValue, err := compressJSON(newStateValue)
+		compressedStateValue, err := compress(newStateValue)
 		if err != nil {
 			return fmt.Errorf("compress new assigned state: %w", err)
 		}
@@ -472,7 +417,7 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 
 		// 3. Prepare and commit the transaction with three atomic checks.
 		// a) Check that the executor's status is ACTIVE.
-		comparisons = append(comparisons, clientv3.Compare(clientv3.Value(statusKey), "=", _executorStatusRunningJSONCompressed))
+		comparisons = append(comparisons, clientv3.Compare(clientv3.Value(statusKey), "=", compressedActiveStatus()))
 		// b) Check that the assigned_state key hasn't been changed by another process.
 		comparisons = append(comparisons, clientv3.Compare(clientv3.ModRevision(assignedState), "=", modRevision))
 		// c) Check that the cache is up to date.
@@ -510,9 +455,9 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 		if err != nil || len(currentStatusResp.Kvs) == 0 {
 			return store.ErrExecutorNotFound
 		}
-		if string(currentStatusResp.Kvs[0].Value) != _executorStatusRunningJSONCompressed {
+		if string(currentStatusResp.Kvs[0].Value) != compressedActiveStatus() {
 			// Decompress the status for error message
-			decompressedStatus, _ := decompressJSON(currentStatusResp.Kvs[0].Value)
+			decompressedStatus, _ := decompress(currentStatusResp.Kvs[0].Value)
 			return fmt.Errorf(`%w: executor status is %s"`, store.ErrVersionConflict, string(decompressedStatus))
 		}
 
