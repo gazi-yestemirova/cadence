@@ -9,13 +9,13 @@ import (
 	"github.com/uber/cadence/common/types"
 )
 
-// compress compresses JSON data using snappy compression
+// compress compresses data using snappy compression
 func compress(data []byte) ([]byte, error) {
 	return snappy.Encode(nil, data), nil
 }
 
 // decompress decompresses snappy-compressed data with backward compatibility for uncompressed data
-// If decompression fails (indicating legacy uncompressed data), return the data as-is
+// If decompression fails (indicating it is uncompressed data), return the data as-is
 func decompress(data []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return data, nil
@@ -36,8 +36,7 @@ func compressedActiveStatus() string {
 	return string(compressed)
 }
 
-// decompressAndUnmarshal decompresses data (if needed) and unmarshals it into the target
-// This function handles both compressed and uncompressed data for backward compatibility
+// decompressAndUnmarshal decompresses data and unmarshals it into the target
 // errorContext is used to provide meaningful error messages
 func decompressAndUnmarshal(data []byte, target interface{}, errorContext string) error {
 	decompressed, err := decompress(data)
