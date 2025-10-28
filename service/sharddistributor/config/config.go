@@ -54,7 +54,7 @@ type (
 		Namespaces      []Namespace   `yaml:"namespaces"`
 		Process         LeaderProcess `yaml:"process"`
 		Store           Store         `yaml:"store"`
-		DataCompression bool          `yaml:"dataCompression"`
+		DataCompression bool          `yaml:"dataCompression" default:"true"`
 	}
 
 	// Store is a generic container for any storage configuration that should be parsed by the implementation.
@@ -133,10 +133,11 @@ func GetShardDistributionFromExternal(in config.ShardDistribution) ShardDistribu
 	}
 
 	return ShardDistribution{
-		LeaderStore: Store(in.LeaderStore),
-		Store:       Store(in.Store),
-		Election:    Election(in.Election),
-		Namespaces:  namespaces,
-		Process:     LeaderProcess(in.Process),
+		LeaderStore:     Store(in.LeaderStore),
+		Store:           Store(in.Store),
+		Election:        Election(in.Election),
+		Namespaces:      namespaces,
+		Process:         LeaderProcess(in.Process),
+		DataCompression: in.DataCompression,
 	}
 }
