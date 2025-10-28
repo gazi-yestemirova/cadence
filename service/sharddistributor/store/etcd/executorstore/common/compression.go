@@ -17,8 +17,13 @@ var (
 	snappyMagic = []byte{0xff, 0x06, 0x00, 0x00, 's', 'N', 'a', 'P', 'p', 'Y'}
 )
 
-// Compress compresses data using snappy's framed format
-func Compress(data []byte) ([]byte, error) {
+// Compress compresses data using snappy's framed format if compression is enabled
+// If compressionEnabled returns false, returns the data as-is without compression
+func Compress(data []byte, compressionEnabled bool) ([]byte, error) {
+	if !compressionEnabled {
+		return data, nil
+	}
+
 	var buf bytes.Buffer
 	w := snappy.NewBufferedWriter(&buf)
 
@@ -50,8 +55,9 @@ func Decompress(data []byte) ([]byte, error) {
 	return decompressed, nil
 }
 
-func CompressedActiveStatus() string {
-	compressed, _ := Compress([]byte(fmt.Sprintf(`"%s"`, types.ExecutorStatusACTIVE)))
+// CompressedActiveStatus returns the compressed active status string.
+func CompressedActiveStatus(compressionEnabled bool) string {
+	compressed, _ := Compress([]byte(fmt.Sprintf(`"%s"`, types.ExecutorStatusACTIVE)), compressionEnabled)
 	return string(compressed)
 }
 

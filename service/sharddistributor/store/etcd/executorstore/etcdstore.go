@@ -25,10 +25,11 @@ import (
 )
 
 type executorStoreImpl struct {
-	client     *clientv3.Client
-	prefix     string
-	logger     log.Logger
-	shardCache *shardcache.ShardToExecutorCache
+	client          *clientv3.Client
+	prefix          string
+	dataCompression bool
+	logger          log.Logger
+	shardCache      *shardcache.ShardToExecutorCache
 }
 
 // ExecutorStoreParams defines the dependencies for the etcd store, for use with fx.
@@ -72,10 +73,11 @@ func NewStore(p ExecutorStoreParams) (store.Store, error) {
 	shardCache := shardcache.NewShardToExecutorCache(etcdCfg.Prefix, etcdClient, p.Logger)
 
 	store := &executorStoreImpl{
-		client:     etcdClient,
-		prefix:     etcdCfg.Prefix,
-		logger:     p.Logger,
-		shardCache: shardCache,
+		client:          etcdClient,
+		prefix:          etcdCfg.Prefix,
+		dataCompression: p.Cfg.DataCompression,
+		logger:          p.Logger,
+		shardCache:      shardCache,
 	}
 
 	p.Lifecycle.Append(fx.StartStopHook(store.Start, store.Stop))
@@ -119,12 +121,12 @@ func (s *executorStoreImpl) RecordHeartbeat(ctx context.Context, namespace, exec
 	}
 
 	// Compress data before writing to etcd
-	compressedReportedShards, err := common.Compress(reportedShardsData)
+	compressedReportedShards, err := common.Compress(reportedShardsData, s.dataCompression)
 	if err != nil {
 		return fmt.Errorf("compress reported shards: %w", err)
 	}
 
-	compressedState, err := common.Compress(jsonState)
+	compressedState, err := common.Compress(jsonState, s.dataCompression)
 	if err != nil {
 		return fmt.Errorf("compress state: %w", err)
 	}
@@ -315,7 +317,7 @@ func (s *executorStoreImpl) AssignShards(ctx context.Context, namespace string, 
 		if err != nil {
 			return fmt.Errorf("marshal assigned shards for executor %s: %w", executorID, err)
 		}
-		compressedValue, err := common.Compress(value)
+		compressedValue, err := common.Compress(value, s.dataCompression)
 		if err != nil {
 			return fmt.Errorf("compress assigned shards for executor %s: %w", executorID, err)
 		}
@@ -416,7 +418,7 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 			return fmt.Errorf("marshal new assigned state: %w", err)
 		}
 
-		compressedStateValue, err := common.Compress(newStateValue)
+		compressedStateValue, err := common.Compress(newStateValue, s.dataCompression)
 		if err != nil {
 			return fmt.Errorf("compress new assigned state: %w", err)
 		}
@@ -425,7 +427,7 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 
 		// 3. Prepare and commit the transaction with three atomic checks.
 		// a) Check that the executor's status is ACTIVE.
-		comparisons = append(comparisons, clientv3.Compare(clientv3.Value(statusKey), "=", common.CompressedActiveStatus()))
+		comparisons = append(comparisons, clientv3.Compare(clientv3.Value(statusKey), "=", common.CompressedActiveStatus(s.dataCompression)))
 		// b) Check that the assigned_state key hasn't been changed by another process.
 		comparisons = append(comparisons, clientv3.Compare(clientv3.ModRevision(assignedState), "=", modRevision))
 		// c) Check that the cache is up to date.
@@ -463,7 +465,7 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 		if err != nil || len(currentStatusResp.Kvs) == 0 {
 			return store.ErrExecutorNotFound
 		}
-		if string(currentStatusResp.Kvs[0].Value) != common.CompressedActiveStatus() {
+		if string(currentStatusResp.Kvs[0].Value) != common.CompressedActiveStatus(s.dataCompression) {
 			// Decompress the status for an error message
 			decompressedStatus, err := common.Decompress(currentStatusResp.Kvs[0].Value)
 			if err != nil {

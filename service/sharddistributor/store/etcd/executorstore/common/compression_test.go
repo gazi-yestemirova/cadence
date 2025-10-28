@@ -14,7 +14,7 @@ import (
 func TestCompressDecompress(t *testing.T) {
 	original := []byte(`{"status":"ACTIVE","shards":["shard1","shard2"]}`)
 
-	compressed, err := Compress(original)
+	compressed, err := Compress(original, true)
 	require.NoError(t, err)
 	require.NotNil(t, compressed)
 
@@ -23,6 +23,19 @@ func TestCompressDecompress(t *testing.T) {
 	decompressed, err := Decompress(compressed)
 	require.NoError(t, err)
 	assert.Equal(t, original, decompressed)
+}
+
+func TestCompressWithDisabledFlag(t *testing.T) {
+	original := []byte(`{"status":"ACTIVE","shards":["shard1","shard2"]}`)
+
+	result, err := Compress(original, false)
+	require.NoError(t, err)
+	assert.Equal(t, original, result, "Should return original data when compression is disabled")
+
+	var status map[string]interface{}
+	err = json.Unmarshal(result, &status)
+	require.NoError(t, err)
+	assert.Equal(t, "ACTIVE", status["status"])
 }
 
 func TestDecompress(t *testing.T) {
@@ -53,7 +66,7 @@ func TestDecompress(t *testing.T) {
 
 	t.Run("Compressed data", func(t *testing.T) {
 		original := []byte(`{"status":"DRAINING"}`)
-		compressed, err := Compress(original)
+		compressed, err := Compress(original, true)
 		require.NoError(t, err)
 
 		result, err := Decompress(compressed)
@@ -90,7 +103,7 @@ func TestDecompressAndUnmarshal(t *testing.T) {
 			Shards: []string{"shard3", "shard4"},
 		}
 		originalJSON, _ := json.Marshal(original)
-		compressed, err := Compress(originalJSON)
+		compressed, err := Compress(originalJSON, true)
 		require.NoError(t, err)
 
 		var result testData
@@ -111,16 +124,28 @@ func TestDecompressAndUnmarshal(t *testing.T) {
 }
 
 func TestCompressedActiveStatus(t *testing.T) {
-	compressed := CompressedActiveStatus()
-	require.NotEmpty(t, compressed)
+	t.Run("Compression enabled", func(t *testing.T) {
+		compressed := CompressedActiveStatus(true)
+		require.NotEmpty(t, compressed)
 
-	decompressed, err := Decompress([]byte(compressed))
-	require.NoError(t, err)
+		decompressed, err := Decompress([]byte(compressed))
+		require.NoError(t, err)
 
-	var status types.ExecutorStatus
-	err = json.Unmarshal(decompressed, &status)
-	require.NoError(t, err)
-	assert.Equal(t, types.ExecutorStatusACTIVE, status)
+		var status types.ExecutorStatus
+		err = json.Unmarshal(decompressed, &status)
+		require.NoError(t, err)
+		assert.Equal(t, types.ExecutorStatusACTIVE, status)
+	})
+
+	t.Run("Compression disabled", func(t *testing.T) {
+		uncompressed := CompressedActiveStatus(false)
+		require.NotEmpty(t, uncompressed)
+
+		var status types.ExecutorStatus
+		err := json.Unmarshal([]byte(uncompressed), &status)
+		require.NoError(t, err)
+		assert.Equal(t, types.ExecutorStatusACTIVE, status)
+	})
 }
 
 func TestHasFramedHeader(t *testing.T) {
