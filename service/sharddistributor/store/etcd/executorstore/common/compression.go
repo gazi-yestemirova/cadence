@@ -1,34 +1,52 @@
 package common
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 
 	"github.com/golang/snappy"
 
 	"github.com/uber/cadence/common/log"
-	"github.com/uber/cadence/common/log/tag"
 	"github.com/uber/cadence/common/types"
 )
 
-// Compress compresses data using snappy compression
+var (
+	// snappyMagic is a magic prefix prepended to compressed data to distinguish it from uncompressed data
+	snappyMagic = []byte{0xff, 0x06, 0x00, 0x00, 's', 'N', 'a', 'P', 'p', 'Y'}
+)
+
+// Compress compresses data using snappy's framed format
 func Compress(data []byte) ([]byte, error) {
-	return snappy.Encode(nil, data), nil
+	var buf bytes.Buffer
+	w := snappy.NewBufferedWriter(&buf)
+
+	if _, err := w.Write(data); err != nil {
+		return nil, err
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
-// Decompress decompresses snappy-compressed data
+// Decompress decodes snappy-compressed data
+// If the snappy header is present, it will successfully decompress it or return an error
+// If the snappy header is absent, it treats data as uncompressed and returns it as-is
 func Decompress(data []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return data, nil
 	}
 
-	decompressed, err := snappy.Decode(nil, data)
-	if err != nil {
-		// Decompression failed
-		// Return it as-is for backward compatibility
-		return nil, fmt.Errorf("failed to decode: %v", err)
+	if !hasFramedHeader(data) {
+		return data, nil
 	}
-
+	r := snappy.NewReader(bytes.NewReader(data))
+	decompressed, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
 	return decompressed, nil
 }
 
@@ -38,15 +56,18 @@ func CompressedActiveStatus() string {
 }
 
 // DecompressAndUnmarshal decompresses data and unmarshals it into the target
-// This function handles both compressed and uncompressed data for backward compatibility
 // errorContext is used to provide meaningful error messages
 func DecompressAndUnmarshal(data []byte, target interface{}, errorContext string, logger log.Logger) error {
 	decompressed, err := Decompress(data)
 	if err != nil {
-		logger.Warn(fmt.Sprintf("failed to decompress %s, proceeding with unmarshaling..", errorContext), tag.Error(err))
+		return fmt.Errorf("decompress %s: %w", errorContext, err)
 	}
 	if err := json.Unmarshal(decompressed, target); err != nil {
 		return fmt.Errorf("unmarshal %s: %w", errorContext, err)
 	}
 	return nil
+}
+
+func hasFramedHeader(b []byte) bool {
+	return len(b) >= len(snappyMagic) && bytes.Equal(b[:len(snappyMagic)], snappyMagic)
 }
