@@ -3,7 +3,6 @@ package executorstore
 import (
 	"context"
 	"encoding/json"
-	"github.com/uber/cadence/service/sharddistributor/store/etcd/executorstore/common"
 	"strconv"
 	"testing"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/uber/cadence/common/types"
 	"github.com/uber/cadence/service/sharddistributor/store"
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/etcdkeys"
+	"github.com/uber/cadence/service/sharddistributor/store/etcd/executorstore/common"
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/leaderstore"
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/testhelper"
 )

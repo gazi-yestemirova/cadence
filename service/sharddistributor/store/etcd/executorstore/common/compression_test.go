@@ -3,9 +3,9 @@ package common
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/golang/snappy"
 	"testing"
 
+	"github.com/golang/snappy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
