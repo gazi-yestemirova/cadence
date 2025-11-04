@@ -29,10 +29,11 @@ var (
 )
 
 type executorStoreImpl struct {
-	client     *clientv3.Client
-	prefix     string
-	logger     log.Logger
-	shardCache *shardcache.ShardToExecutorCache
+	client      *clientv3.Client
+	prefix      string
+	logger      log.Logger
+	shardCache  *shardcache.ShardToExecutorCache
+	compression string
 }
 
 // ExecutorStoreParams defines the dependencies for the etcd store, for use with fx.
@@ -52,6 +53,7 @@ func NewStore(p ExecutorStoreParams) (store.Store, error) {
 		Endpoints   []string      `yaml:"endpoints"`
 		DialTimeout time.Duration `yaml:"dialTimeout"`
 		Prefix      string        `yaml:"prefix"`
+		Compression string        `yaml:"compression"`
 	}
 
 	if err := p.Cfg.Store.StorageParams.Decode(&etcdCfg); err != nil {
@@ -72,10 +74,11 @@ func NewStore(p ExecutorStoreParams) (store.Store, error) {
 	shardCache := shardcache.NewShardToExecutorCache(etcdCfg.Prefix, etcdClient, p.Logger)
 
 	store := &executorStoreImpl{
-		client:     etcdClient,
-		prefix:     etcdCfg.Prefix,
-		logger:     p.Logger,
-		shardCache: shardCache,
+		client:      etcdClient,
+		prefix:      etcdCfg.Prefix,
+		logger:      p.Logger,
+		shardCache:  shardCache,
+		compression: etcdCfg.Compression,
 	}
 
 	p.Lifecycle.Append(fx.StartStopHook(store.Start, store.Stop))
@@ -110,19 +113,30 @@ func (s *executorStoreImpl) RecordHeartbeat(ctx context.Context, namespace, exec
 
 	reportedShardsData, err := json.Marshal(request.ReportedShards)
 	if err != nil {
-		return fmt.Errorf("marshal assinged shards: %w", err)
+		return fmt.Errorf("marshal reported shards: %w", err)
 	}
 
 	jsonState, err := json.Marshal(request.Status)
 	if err != nil {
-		return fmt.Errorf("marshal assinged shards: %w", err)
+		return fmt.Errorf("marshal assinged state: %w", err)
+	}
+
+	// Compress data before writing to etcd
+	compressedReportedShards, err := common.Compress(reportedShardsData, s.compression)
+	if err != nil {
+		return fmt.Errorf("compress reported shards: %w", err)
+	}
+
+	compressedState, err := common.Compress(jsonState, s.compression)
+	if err != nil {
+		return fmt.Errorf("compress assigned state: %w", err)
 	}
 
 	// Build all operations including metadata
 	ops := []clientv3.Op{
 		clientv3.OpPut(heartbeatETCDKey, strconv.FormatInt(request.LastHeartbeat, 10)),
-		clientv3.OpPut(stateETCDKey, string(jsonState)),
-		clientv3.OpPut(reportedShardsETCDKey, string(reportedShardsData)),
+		clientv3.OpPut(stateETCDKey, string(compressedState)),
+		clientv3.OpPut(reportedShardsETCDKey, string(compressedReportedShards)),
 	}
 	for key, value := range request.Metadata {
 		metadataKey := etcdkeys.BuildMetadataKey(s.prefix, namespace, executorID, key)
@@ -304,7 +318,13 @@ func (s *executorStoreImpl) AssignShards(ctx context.Context, namespace string, 
 		if err != nil {
 			return fmt.Errorf("marshal assigned shards for executor %s: %w", executorID, err)
 		}
-		ops = append(ops, clientv3.OpPut(executorStateKey, string(value)))
+
+		compressedValue, err := common.Compress(value, s.compression)
+		if err != nil {
+			return fmt.Errorf("compress assigned shards for executor %s: %w", executorID, err)
+		}
+		ops = append(ops, clientv3.OpPut(executorStateKey, string(compressedValue)))
+
 		comparisons = append(comparisons, clientv3.Compare(clientv3.ModRevision(executorStateKey), "=", state.ModRevision))
 	}
 
@@ -412,9 +432,14 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 			state.AssignedShards[shardID] = &types.ShardAssignment{Status: types.AssignmentStatusREADY}
 		}
 
+		// Compress new state value
 		newStateValue, err := json.Marshal(state)
 		if err != nil {
 			return fmt.Errorf("marshal new assigned state: %w", err)
+		}
+		compressedStateValue, err := common.Compress(newStateValue, s.compression)
+		if err != nil {
+			return fmt.Errorf("compress new assigned state: %w", err)
 		}
 
 		var comparisons []clientv3.Cmp
@@ -442,7 +467,7 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 
 		txnResp, err := s.client.Txn(ctx).
 			If(comparisons...).
-			Then(clientv3.OpPut(assignedState, string(newStateValue))).
+			Then(clientv3.OpPut(assignedState, string(compressedStateValue))).
 			Commit()
 
 		if err != nil {

@@ -1,14 +1,46 @@
 package common
 
 import (
-	"bytes"
 	"encoding/json"
 	"testing"
 
-	"github.com/golang/snappy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCompress(t *testing.T) {
+	original := []byte("test-data")
+
+	t.Run("No compression when empty", func(t *testing.T) {
+		compressed, err := Compress(original, "")
+		require.NoError(t, err)
+		assert.Equal(t, original, compressed)
+	})
+
+	t.Run("No compression when none", func(t *testing.T) {
+		compressed, err := Compress(original, "none")
+		require.NoError(t, err)
+		assert.Equal(t, original, compressed)
+	})
+
+	t.Run("Snappy compression", func(t *testing.T) {
+		compressed, err := Compress(original, CompressionSnappy)
+		require.NoError(t, err)
+		require.NotNil(t, compressed)
+		assert.NotEqual(t, original, compressed)
+
+		decompressed, err := Decompress(compressed)
+		require.NoError(t, err)
+		assert.Equal(t, original, decompressed)
+	})
+
+	t.Run("Unsupported compression", func(t *testing.T) {
+		compressed, err := Compress(original, "unsupported")
+		require.Error(t, err)
+		assert.Nil(t, compressed)
+		assert.Contains(t, err.Error(), "unsupported compression type")
+	})
+}
 
 func TestDecompress(t *testing.T) {
 	t.Run("Empty data", func(t *testing.T) {
@@ -38,7 +70,7 @@ func TestDecompress(t *testing.T) {
 
 	t.Run("Compressed data", func(t *testing.T) {
 		original := []byte(`{"status":"DRAINING"}`)
-		compressed, err := compressData(original)
+		compressed, err := Compress(original, CompressionSnappy)
 		require.NoError(t, err)
 
 		result, err := Decompress(compressed)
@@ -74,7 +106,7 @@ func TestDecompressAndUnmarshal(t *testing.T) {
 			Shards: []string{"shard3", "shard4"},
 		}
 		originalJSON, _ := json.Marshal(original)
-		compressed, err := compressData(originalJSON)
+		compressed, err := Compress(originalJSON, CompressionSnappy)
 		require.NoError(t, err)
 
 		var result testData
@@ -92,17 +124,4 @@ func TestDecompressAndUnmarshal(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unmarshal")
 	})
-}
-
-func compressData(data []byte) ([]byte, error) {
-	var buf bytes.Buffer
-	w := snappy.NewBufferedWriter(&buf)
-
-	if _, err := w.Write(data); err != nil {
-		return nil, err
-	}
-	if err := w.Close(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/golang/snappy"
 )
@@ -13,6 +14,33 @@ var (
 	// _snappyHeader is a magic prefix prepended to compressed data to distinguish it from uncompressed data
 	_snappyHeader = []byte{0xff, 0x06, 0x00, 0x00, 's', 'N', 'a', 'P', 'p', 'Y'}
 )
+
+const (
+	// CompressionSnappy indicates snappy compression should be applied
+	CompressionSnappy = "snappy"
+)
+
+// Compress encodes data using the compression library identified by compressionType
+// When compressionType is empty or "none", the data is returned as-is
+func Compress(data []byte, compressionType string) ([]byte, error) {
+	switch strings.ToLower(compressionType) {
+	case "", "none":
+		return data, nil
+	case CompressionSnappy:
+		var buf bytes.Buffer
+		w := snappy.NewBufferedWriter(&buf)
+
+		if _, err := w.Write(data); err != nil {
+			return nil, err
+		}
+		if err := w.Close(); err != nil {
+			return nil, err
+		}
+		return buf.Bytes(), nil
+	default:
+		return nil, fmt.Errorf("unsupported compression type: %s", compressionType)
+	}
+}
 
 // Decompress decodes snappy-compressed data
 // If the snappy header is present, it will successfully decompress it or return an error
