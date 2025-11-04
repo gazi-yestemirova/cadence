@@ -150,9 +150,9 @@ func (n *namespaceShardToExecutor) refresh(ctx context.Context) error {
 			shardOwner := getOrCreateShardOwner(shardOwners, executorID)
 
 			var assignedState store.AssignedState
-			err = common.DecompressAndUnmarshal(kv.Value, &assignedState, "assigned state")
+			err = common.DecompressAndUnmarshal(kv.Value, &assignedState)
 			if err != nil {
-				return err
+				return fmt.Errorf("parse assigned state: %w", err)
 			}
 			for shardID := range assignedState.AssignedShards {
 				n.shardToExecutor[shardID] = shardOwner

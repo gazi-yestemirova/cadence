@@ -62,7 +62,7 @@ func TestDecompressAndUnmarshal(t *testing.T) {
 		data := []byte(`{"status":"ACTIVE","shards":["shard1","shard2"]}`)
 
 		var result testData
-		err := DecompressAndUnmarshal(data, &result, "test data")
+		err := DecompressAndUnmarshal(data, &result)
 		require.NoError(t, err)
 		assert.Equal(t, "ACTIVE", result.Status)
 		assert.Equal(t, []string{"shard1", "shard2"}, result.Shards)
@@ -78,7 +78,7 @@ func TestDecompressAndUnmarshal(t *testing.T) {
 		require.NoError(t, err)
 
 		var result testData
-		err = DecompressAndUnmarshal(compressed, &result, "test data")
+		err = DecompressAndUnmarshal(compressed, &result)
 		require.NoError(t, err)
 		assert.Equal(t, original.Status, result.Status)
 		assert.Equal(t, original.Shards, result.Shards)
@@ -88,29 +88,9 @@ func TestDecompressAndUnmarshal(t *testing.T) {
 		invalidJSON := []byte(`{invalid json}`)
 
 		var result testData
-		err := DecompressAndUnmarshal(invalidJSON, &result, "test data")
+		err := DecompressAndUnmarshal(invalidJSON, &result)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "unmarshal test data")
-	})
-}
-
-func TestHasFramedHeader(t *testing.T) {
-	t.Run("Data with header", func(t *testing.T) {
-		data := append(snappyMagic, []byte("some data")...)
-		assert.True(t, hasFramedHeader(data))
-	})
-
-	t.Run("Data without header", func(t *testing.T) {
-		data := []byte(`{"json":"data"}`)
-		assert.False(t, hasFramedHeader(data))
-	})
-
-	t.Run("Empty data", func(t *testing.T) {
-		assert.False(t, hasFramedHeader([]byte{}))
-	})
-
-	t.Run("Data shorter than header", func(t *testing.T) {
-		assert.False(t, hasFramedHeader([]byte{0xff, 0x06}))
+		assert.Contains(t, err.Error(), "unmarshal")
 	})
 }
 

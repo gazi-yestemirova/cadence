@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	// snappyMagic is a magic prefix prepended to compressed data to distinguish it from uncompressed data
-	snappyMagic = []byte{0xff, 0x06, 0x00, 0x00, 's', 'N', 'a', 'P', 'p', 'Y'}
+	// _snappyHeader is a magic prefix prepended to compressed data to distinguish it from uncompressed data
+	_snappyHeader = []byte{0xff, 0x06, 0x00, 0x00, 's', 'N', 'a', 'P', 'p', 'Y'}
 )
 
 // Decompress decodes snappy-compressed data
@@ -22,30 +22,29 @@ func Decompress(data []byte) ([]byte, error) {
 		return data, nil
 	}
 
-	if !hasFramedHeader(data) {
+	if !bytes.HasPrefix(data, _snappyHeader) {
 		return data, nil
 	}
+
 	r := snappy.NewReader(bytes.NewReader(data))
 	decompressed, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
+
 	return decompressed, nil
 }
 
 // DecompressAndUnmarshal decompresses data and unmarshals it into the target
-// errorContext is used to provide meaningful error messages
-func DecompressAndUnmarshal(data []byte, target interface{}, errorContext string) error {
+func DecompressAndUnmarshal(data []byte, target interface{}) error {
 	decompressed, err := Decompress(data)
 	if err != nil {
-		return fmt.Errorf("decompress %s: %w", errorContext, err)
+		return fmt.Errorf("decompress: %w", err)
 	}
-	if err := json.Unmarshal(decompressed, target); err != nil {
-		return fmt.Errorf("unmarshal %s: %w", errorContext, err)
-	}
-	return nil
-}
 
-func hasFramedHeader(b []byte) bool {
-	return len(b) >= len(snappyMagic) && bytes.Equal(b[:len(snappyMagic)], snappyMagic)
+	if err := json.Unmarshal(decompressed, target); err != nil {
+		return fmt.Errorf("unmarshal: %w", err)
+	}
+
+	return nil
 }

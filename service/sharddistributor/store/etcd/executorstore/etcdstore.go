@@ -175,16 +175,16 @@ func (s *executorStoreImpl) GetHeartbeat(ctx context.Context, namespace string, 
 			}
 			heartbeatState.LastHeartbeat = timestamp
 		case etcdkeys.ExecutorStatusKey:
-			if err := common.DecompressAndUnmarshal(kv.Value, &heartbeatState.Status, "heartbeat state"); err != nil {
-				return nil, nil, err
+			if err := common.DecompressAndUnmarshal(kv.Value, &heartbeatState.Status); err != nil {
+				return nil, nil, fmt.Errorf("parse executor status: %w", err)
 			}
 		case etcdkeys.ExecutorReportedShardsKey:
-			if err := common.DecompressAndUnmarshal(kv.Value, &heartbeatState.ReportedShards, "reported shards"); err != nil {
-				return nil, nil, err
+			if err := common.DecompressAndUnmarshal(kv.Value, &heartbeatState.ReportedShards); err != nil {
+				return nil, nil, fmt.Errorf("parse reported shards: %w", err)
 			}
 		case etcdkeys.ExecutorAssignedStateKey:
-			if err := common.DecompressAndUnmarshal(kv.Value, &assignedState, "assigned state"); err != nil {
-				return nil, nil, err
+			if err := common.DecompressAndUnmarshal(kv.Value, &assignedState); err != nil {
+				return nil, nil, fmt.Errorf("parse assigned shards: %w", err)
 			}
 		}
 	}
@@ -223,16 +223,16 @@ func (s *executorStoreImpl) GetState(ctx context.Context, namespace string) (*st
 			timestamp, _ := strconv.ParseInt(value, 10, 64)
 			heartbeat.LastHeartbeat = timestamp
 		case etcdkeys.ExecutorStatusKey:
-			if err := common.DecompressAndUnmarshal(kv.Value, &heartbeat.Status, "heartbeat state"); err != nil {
-				return nil, err
+			if err := common.DecompressAndUnmarshal(kv.Value, &heartbeat.Status); err != nil {
+				return nil, fmt.Errorf("parse executor status: %w", err)
 			}
 		case etcdkeys.ExecutorReportedShardsKey:
-			if err := common.DecompressAndUnmarshal(kv.Value, &heartbeat.ReportedShards, "reported shards"); err != nil {
-				return nil, err
+			if err := common.DecompressAndUnmarshal(kv.Value, &heartbeat.ReportedShards); err != nil {
+				return nil, fmt.Errorf("parse reported shards: %w", err)
 			}
 		case etcdkeys.ExecutorAssignedStateKey:
-			if err := common.DecompressAndUnmarshal(kv.Value, &assigned, "assigned state"); err != nil {
-				return nil, err
+			if err := common.DecompressAndUnmarshal(kv.Value, &assigned); err != nil {
+				return nil, fmt.Errorf("parse assigned shards: %w, %s", err, value)
 			}
 			assigned.ModRevision = kv.ModRevision
 		}
@@ -373,7 +373,7 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 		// 1. Get the current assigned state of the executor.
 		resp, err := s.client.Get(ctx, assignedState)
 		if err != nil {
-			return fmt.Errorf("get executor state: %w", err)
+			return fmt.Errorf("get executor assigned state: %w", err)
 		}
 
 		var state store.AssignedState
@@ -383,8 +383,8 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 			// If the executor already has shards, load its state.
 			kv := resp.Kvs[0]
 			modRevision = kv.ModRevision
-			if err := common.DecompressAndUnmarshal(kv.Value, &state, "assigned state"); err != nil {
-				return err
+			if err := common.DecompressAndUnmarshal(kv.Value, &state); err != nil {
+				return fmt.Errorf("parse assigned state: %w", err)
 			}
 		} else {
 			// If this is the first shard, initialize the state map.
