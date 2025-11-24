@@ -12,6 +12,7 @@ import (
 	"github.com/uber/cadence/common/log/tag"
 	"github.com/uber/cadence/service/sharddistributor/store"
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/etcdkeys"
+	"github.com/uber/cadence/service/sharddistributor/store/etcd/etcdtypes"
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/executorstore/common"
 )
 
@@ -19,6 +20,7 @@ type namespaceShardToExecutor struct {
 	sync.RWMutex
 
 	shardToExecutor     map[string]*store.ShardOwner
+	executorState       map[*store.ShardOwner][]string // executor -> shardIDs
 	executorRevision    map[string]int64
 	namespace           string
 	etcdPrefix          string
@@ -26,15 +28,17 @@ type namespaceShardToExecutor struct {
 	stopCh              chan struct{}
 	logger              log.Logger
 	client              *clientv3.Client
+	pubSub              *executorStatePubSub
 }
 
 func newNamespaceShardToExecutor(etcdPrefix, namespace string, client *clientv3.Client, stopCh chan struct{}, logger log.Logger) (*namespaceShardToExecutor, error) {
 	// Start listening
-	watchPrefix := etcdkeys.BuildExecutorPrefix(etcdPrefix, namespace)
+	watchPrefix := etcdkeys.BuildExecutorsPrefix(etcdPrefix, namespace)
 	watchChan := client.Watch(context.Background(), watchPrefix, clientv3.WithPrefix(), clientv3.WithPrevKV())
 
 	return &namespaceShardToExecutor{
 		shardToExecutor:     make(map[string]*store.ShardOwner),
+		executorState:       make(map[*store.ShardOwner][]string),
 		executorRevision:    make(map[string]int64),
 		namespace:           namespace,
 		etcdPrefix:          etcdPrefix,
@@ -42,6 +46,7 @@ func newNamespaceShardToExecutor(etcdPrefix, namespace string, client *clientv3.
 		stopCh:              stopCh,
 		logger:              logger,
 		client:              client,
+		pubSub:              newExecutorStatePubSub(logger, namespace),
 	}, nil
 }
 
@@ -84,14 +89,15 @@ func (n *namespaceShardToExecutor) GetExecutorModRevisionCmp() ([]clientv3.Cmp, 
 	defer n.RUnlock()
 	comparisons := []clientv3.Cmp{}
 	for executor, revision := range n.executorRevision {
-		executorAssignedStateKey, err := etcdkeys.BuildExecutorKey(n.etcdPrefix, n.namespace, executor, etcdkeys.ExecutorAssignedStateKey)
-		if err != nil {
-			return nil, fmt.Errorf("build executor assigned state key: %w", err)
-		}
+		executorAssignedStateKey := etcdkeys.BuildExecutorKey(n.etcdPrefix, n.namespace, executor, etcdkeys.ExecutorAssignedStateKey)
 		comparisons = append(comparisons, clientv3.Compare(clientv3.ModRevision(executorAssignedStateKey), "=", revision))
 	}
 
 	return comparisons, nil
+}
+
+func (n *namespaceShardToExecutor) Subscribe(ctx context.Context) (<-chan map[*store.ShardOwner][]string, func()) {
+	return n.pubSub.subscribe(ctx)
 }
 
 func (n *namespaceShardToExecutor) nameSpaceRefreashLoop() {
@@ -124,8 +130,25 @@ func (n *namespaceShardToExecutor) nameSpaceRefreashLoop() {
 }
 
 func (n *namespaceShardToExecutor) refresh(ctx context.Context) error {
+	err := n.refreshExecutorState(ctx)
+	if err != nil {
+		return fmt.Errorf("refresh executor state: %w", err)
+	}
 
-	executorPrefix := etcdkeys.BuildExecutorPrefix(n.etcdPrefix, n.namespace)
+	n.RLock()
+	executorState := make(map[*store.ShardOwner][]string)
+	for executor, shardIDs := range n.executorState {
+		executorState[executor] = make([]string, len(shardIDs))
+		copy(executorState[executor], shardIDs)
+	}
+	n.RUnlock()
+
+	n.pubSub.publish(n.executorState)
+	return nil
+}
+
+func (n *namespaceShardToExecutor) refreshExecutorState(ctx context.Context) error {
+	executorPrefix := etcdkeys.BuildExecutorsPrefix(n.etcdPrefix, n.namespace)
 
 	resp, err := n.client.Get(ctx, executorPrefix, clientv3.WithPrefix())
 	if err != nil {
@@ -136,6 +159,7 @@ func (n *namespaceShardToExecutor) refresh(ctx context.Context) error {
 	defer n.Unlock()
 	// Clear the cache, so we don't have any stale data
 	n.shardToExecutor = make(map[string]*store.ShardOwner)
+	n.executorState = make(map[*store.ShardOwner][]string)
 	n.executorRevision = make(map[string]int64)
 
 	shardOwners := make(map[string]*store.ShardOwner)
@@ -149,15 +173,20 @@ func (n *namespaceShardToExecutor) refresh(ctx context.Context) error {
 		case etcdkeys.ExecutorAssignedStateKey:
 			shardOwner := getOrCreateShardOwner(shardOwners, executorID)
 
-			var assignedState store.AssignedState
+			var assignedState etcdtypes.AssignedState
 			err = common.DecompressAndUnmarshal(kv.Value, &assignedState)
 			if err != nil {
 				return fmt.Errorf("parse assigned state: %w", err)
 			}
+
+			// Build both shard->executor and executor->shards mappings
+			shardIDs := make([]string, 0, len(assignedState.AssignedShards))
 			for shardID := range assignedState.AssignedShards {
 				n.shardToExecutor[shardID] = shardOwner
+				shardIDs = append(shardIDs, shardID)
 				n.executorRevision[executorID] = kv.ModRevision
 			}
+			n.executorState[shardOwner] = shardIDs
 
 		case etcdkeys.ExecutorMetadataKey:
 			shardOwner := getOrCreateShardOwner(shardOwners, executorID)

@@ -2731,6 +2731,13 @@ type ActiveClusterInfo struct {
 	FailoverVersion   int64  `json:"failoverVersion" yaml:"failoverVersion"`
 }
 
+func (v *ActiveClusterInfo) GetActiveClusterName() string {
+	if v == nil {
+		return ""
+	}
+	return v.ActiveClusterName
+}
+
 // ByteSize returns the approximate memory used in bytes
 func (v ActiveClusterInfo) ByteSize() uint64 {
 	return uint64(unsafe.Sizeof(v)) + uint64(len(v.ActiveClusterName))
@@ -2760,6 +2767,20 @@ func (v *ActiveClusters) DeepCopy() *ActiveClusters {
 type ClusterAttribute struct {
 	Scope string `json:"scope,omitempty" yaml:"scope,omitempty"`
 	Name  string `json:"name,omitempty" yaml:"name,omitempty"`
+}
+
+func (c *ClusterAttribute) GetScope() string {
+	if c == nil {
+		return ""
+	}
+	return c.Scope
+}
+
+func (c *ClusterAttribute) GetName() string {
+	if c == nil {
+		return ""
+	}
+	return c.Name
 }
 
 func (c *ClusterAttribute) Equals(other *ClusterAttribute) bool {

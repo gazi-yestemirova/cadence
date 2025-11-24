@@ -3,7 +3,6 @@ package executorstore
 import (
 	"context"
 	"encoding/json"
-	"strconv"
 	"testing"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/uber/cadence/common/types"
 	"github.com/uber/cadence/service/sharddistributor/store"
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/etcdkeys"
+	"github.com/uber/cadence/service/sharddistributor/store/etcd/etcdtypes"
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/executorstore/common"
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/leaderstore"
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/testhelper"
@@ -30,11 +30,11 @@ func TestRecordHeartbeat(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	nowTS := time.Now().Unix()
+	now := time.Now().UTC()
 
 	executorID := "executor-TestRecordHeartbeat"
 	req := store.HeartbeatState{
-		LastHeartbeat: nowTS,
+		LastHeartbeat: now,
 		Status:        types.ExecutorStatusACTIVE,
 		ReportedShards: map[string]*types.ShardStatusReport{
 			"shard-TestRecordHeartbeat": {Status: types.ShardStatusREADY},
@@ -49,19 +49,16 @@ func TestRecordHeartbeat(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify directly in etcd
-	heartbeatKey, err := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, etcdkeys.ExecutorHeartbeatKey)
-	require.NoError(t, err)
-	stateKey, err := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, etcdkeys.ExecutorStatusKey)
-	require.NoError(t, err)
-	reportedShardsKey, err := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, etcdkeys.ExecutorReportedShardsKey)
-	require.NoError(t, err)
+	heartbeatKey := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, etcdkeys.ExecutorHeartbeatKey)
+	stateKey := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, etcdkeys.ExecutorStatusKey)
+	reportedShardsKey := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, etcdkeys.ExecutorReportedShardsKey)
 	metadataKey1 := etcdkeys.BuildMetadataKey(tc.EtcdPrefix, tc.Namespace, executorID, "key-1")
 	metadataKey2 := etcdkeys.BuildMetadataKey(tc.EtcdPrefix, tc.Namespace, executorID, "key-2")
 
 	resp, err := tc.Client.Get(ctx, heartbeatKey)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), resp.Count, "Heartbeat key should exist")
-	assert.Equal(t, strconv.FormatInt(nowTS, 10), string(resp.Kvs[0].Value))
+	assert.Equal(t, etcdtypes.FormatTime(now), string(resp.Kvs[0].Value))
 
 	resp, err = tc.Client.Get(ctx, stateKey)
 	require.NoError(t, err)
@@ -121,7 +118,7 @@ func TestRecordHeartbeat_NoCompression(t *testing.T) {
 
 	executorID := "executor-no-compression"
 	req := store.HeartbeatState{
-		LastHeartbeat: time.Now().Unix(),
+		LastHeartbeat: time.Now().UTC(),
 		Status:        types.ExecutorStatusACTIVE,
 		ReportedShards: map[string]*types.ShardStatusReport{
 			"shard-no-compression": {Status: types.ShardStatusREADY},
@@ -130,9 +127,9 @@ func TestRecordHeartbeat_NoCompression(t *testing.T) {
 
 	require.NoError(t, executorStore.RecordHeartbeat(ctx, tc.Namespace, executorID, req))
 
-	stateKey, err := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, etcdkeys.ExecutorStatusKey)
+	stateKey := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, etcdkeys.ExecutorStatusKey)
 	require.NoError(t, err)
-	reportedShardsKey, err := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, etcdkeys.ExecutorReportedShardsKey)
+	reportedShardsKey := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, etcdkeys.ExecutorReportedShardsKey)
 	require.NoError(t, err)
 
 	stateResp, err := tc.Client.Get(ctx, stateKey)
@@ -156,12 +153,12 @@ func TestGetHeartbeat(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	nowTS := time.Now().Unix()
+	now := time.Now().UTC()
 
 	executorID := "executor-get"
 	req := store.HeartbeatState{
 		Status:        types.ExecutorStatusDRAINING,
-		LastHeartbeat: nowTS,
+		LastHeartbeat: now,
 	}
 
 	// 1. Record a heartbeat
@@ -189,7 +186,7 @@ func TestGetHeartbeat(t *testing.T) {
 
 	// 3. Verify the state
 	assert.Equal(t, types.ExecutorStatusDRAINING, hb.Status)
-	assert.Equal(t, nowTS, hb.LastHeartbeat)
+	assert.Equal(t, now, hb.LastHeartbeat)
 	require.NotNil(t, assignedFromDB.AssignedShards)
 	assert.Equal(t, assignState[executorID].AssignedShards, assignedFromDB.AssignedShards)
 
@@ -369,11 +366,11 @@ func TestGuardedOperations(t *testing.T) {
 	elector, err := leaderstore.NewLeaderStore(leaderstore.StoreParams{Client: tc.Client, Cfg: tc.LeaderCfg, Lifecycle: fxtest.NewLifecycle(t)})
 	require.NoError(t, err)
 	election1, err := elector.CreateElection(ctx, namespace)
-	require.NoError(t, err)
 	defer election1.Cleanup(ctx)
+	defer func() { _ = election1.Cleanup(ctx) }()
 	election2, err := elector.CreateElection(ctx, namespace)
-	require.NoError(t, err)
 	defer election2.Cleanup(ctx)
+	defer func() { _ = election2.Cleanup(ctx) }()
 
 	// 2. First node becomes leader
 	require.NoError(t, election1.Campaign(ctx, "host-1"))
@@ -418,8 +415,7 @@ func TestSubscribe(t *testing.T) {
 	require.NoError(t, err)
 
 	// Manually put a heartbeat update, which is an insignificant change
-	heartbeatKey, err := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, "heartbeat")
-	require.NoError(t, err)
+	heartbeatKey := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, "heartbeat")
 	_, err = tc.Client.Put(ctx, heartbeatKey, "timestamp")
 	require.NoError(t, err)
 
@@ -431,7 +427,7 @@ func TestSubscribe(t *testing.T) {
 	}
 
 	// Now update the reported shards, which IS a significant change
-	reportedShardsKey, err := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, "reported_shards")
+	reportedShardsKey := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, "reported_shards")
 	require.NoError(t, err)
 	compressedShards, err := common.Compress([]byte(`{"shard-1":{"status":"running"}}`), tc.Compression)
 	require.NoError(t, err)
@@ -521,7 +517,7 @@ func TestParseExecutorKey_Errors(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does not have expected prefix")
 
-	key := etcdkeys.BuildExecutorPrefix(tc.EtcdPrefix, tc.Namespace) + "too/many/parts"
+	key := etcdkeys.BuildExecutorsPrefix(tc.EtcdPrefix, tc.Namespace) + "too/many/parts"
 	_, _, err = etcdkeys.ParseExecutorKey(tc.EtcdPrefix, tc.Namespace, key)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected key format")
@@ -585,6 +581,58 @@ func TestAssignShardErrors(t *testing.T) {
 	err = executorStore.AssignShard(ctx, tc.Namespace, shardID2, drainingExecutorID)
 	require.Error(t, err, "Should fail to assign to a draining executor")
 	assert.ErrorIs(t, err, store.ErrVersionConflict, "Error should be ErrVersionConflict for non-active executor")
+}
+
+// TestShardStatisticsPersistence verifies that shard statistics are preserved on assignment
+// when they already exist, and that GetState exposes them.
+func TestShardStatisticsPersistence(t *testing.T) {
+	tc := testhelper.SetupStoreTestCluster(t)
+	executorStore := createStore(t, tc)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	executorID := "exec-stats"
+	shardID := "shard-stats"
+
+	// 1. Setup: ensure executor is ACTIVE
+	require.NoError(t, executorStore.RecordHeartbeat(ctx, tc.Namespace, executorID, store.HeartbeatState{Status: types.ExecutorStatusACTIVE}))
+
+	// 2. Pre-create shard statistics as if coming from prior history
+	stats := store.ShardStatistics{SmoothedLoad: 12.5, LastUpdateTime: time.Unix(1234, 0).UTC(), LastMoveTime: time.Unix(5678, 0).UTC()}
+	shardStatsKey := etcdkeys.BuildShardKey(tc.EtcdPrefix, tc.Namespace, shardID, etcdkeys.ShardStatisticsKey)
+	payload, err := json.Marshal(etcdtypes.FromShardStatistics(&stats))
+	require.NoError(t, err)
+	_, err = tc.Client.Put(ctx, shardStatsKey, string(payload))
+	require.NoError(t, err)
+
+	// 3. Assign the shard via AssignShard (should not clobber existing metrics)
+	require.NoError(t, executorStore.AssignShard(ctx, tc.Namespace, shardID, executorID))
+
+	// 4. Verify via GetState that metrics are preserved and exposed
+	nsState, err := executorStore.GetState(ctx, tc.Namespace)
+	require.NoError(t, err)
+	require.Contains(t, nsState.ShardStats, shardID)
+	updatedStats := nsState.ShardStats[shardID]
+	assert.Equal(t, stats.SmoothedLoad, updatedStats.SmoothedLoad)
+	assert.Equal(t, stats.LastUpdateTime, updatedStats.LastUpdateTime)
+	// This should be greater than the last move time
+	assert.Greater(t, updatedStats.LastMoveTime, stats.LastMoveTime)
+
+	// 5. Also ensure assignment recorded correctly
+	require.Contains(t, nsState.ShardAssignments[executorID].AssignedShards, shardID)
+}
+
+// TestGetShardStatisticsForMissingShard verifies GetState does not report statistics for unknown shards.
+func TestGetShardStatisticsForMissingShard(t *testing.T) {
+	tc := testhelper.SetupStoreTestCluster(t)
+	executorStore := createStore(t, tc)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// No metrics are written; GetState should not contain unknown shard
+	st, err := executorStore.GetState(ctx, tc.Namespace)
+	require.NoError(t, err)
+	assert.NotContains(t, st.ShardStats, "unknown")
 }
 
 // --- Test Setup ---

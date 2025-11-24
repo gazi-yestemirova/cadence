@@ -1095,11 +1095,23 @@ const (
 	// Allowed filters: N/A
 	ReplicatorCacheCapacity
 	// ReplicatorCacheMaxSize is the max size of the replication cache in bytes
-	// KeyName: history.replicatorCacheSize
+	// KeyName: history.replicatorCacheMaxSize
 	// Value type: Int
 	// Default value: 0
 	// Allowed filters: N/A
 	ReplicatorCacheMaxSize
+	// ReplicationBudgetManagerMaxSizeBytes is the max size of the replication budget manager cache in bytes
+	// KeyName: history.replicationBudgetManagerMaxSizeBytes
+	// Value type: Int
+	// Default value: 0
+	// Allowed filters: N/A
+	ReplicationBudgetManagerMaxSizeBytes
+	// ReplicationBudgetManagerMaxSizeCount is the max count of the replication budget manager cache
+	// KeyName: history.replicationBudgetManagerMaxSizeCount
+	// Value type: Int
+	// Default value: 0
+	// Allowed filters: N/A
+	ReplicationBudgetManagerMaxSizeCount
 
 	// ExecutionMgrNumConns is persistence connections number for ExecutionManager
 	// KeyName: history.executionMgrNumConns
@@ -1624,6 +1636,12 @@ const (
 	// Default value: false
 	// Allowed filters: N/A
 	EnableConnectionRetainingDirectChooser
+	// EnableDomainAuditLogging enables audit logging for a domain to the domain audit log table
+	// KeyName: system.enableDomainAuditLogging
+	// Value type: Bool
+	// Default value: false
+	// Allowed filters: N/A
+	EnableDomainAuditLogging
 
 	// key for frontend
 
@@ -2114,6 +2132,8 @@ const (
 	EnableTransferQueueV2PendingTaskCountAlert
 	EnableTimerQueueV2PendingTaskCountAlert
 
+	EnableActiveClusterSelectionPolicyInStartWorkflow
+
 	// LastBoolKey must be the last one in this const group
 	LastBoolKey
 )
@@ -2263,6 +2283,12 @@ const (
 	// Default value: 0
 	// Allowed filters: N/A
 	HistoryErrorInjectionRate
+	// ReplicationBudgetManagerSoftCapThreshold is the soft cap threshold for the replication budget manager cache (0.0 to 1.0)
+	// KeyName: history.replicationBudgetManagerSoftCapThreshold
+	// Value type: Float64
+	// Default value: 1.0
+	// Allowed filters: N/A
+	ReplicationBudgetManagerSoftCapThreshold
 	// ReplicationTaskFetcherTimerJitterCoefficient is the jitter for fetcher timer
 	// KeyName: history.ReplicationTaskFetcherTimerJitterCoefficient
 	// Value type: Float64
@@ -2438,7 +2464,7 @@ const (
 	//
 	// KeyName: shardDistributor.migrationMode
 	// Value type: String
-	// Default value: local_pass
+	// Default value: onboarded
 	// Allowed filters: namespace
 	MigrationMode
 
@@ -2934,6 +2960,13 @@ const (
 	// Default value: 2s
 	// Allowed filters: domainName, taskListName, taskListType
 	TaskIsolationPollerWindow
+
+	// DomainAuditLogTTL is the TTL for domain audit log entries
+	// KeyName: system.domainAuditLogTTL
+	// Value type: Duration
+	// Default value: 365 days (1 year)
+	// Allowed filters: DomainID
+	DomainAuditLogTTL
 
 	// LastDurationKey must be the last one in this const group
 	LastDurationKey
@@ -3714,8 +3747,18 @@ var IntKeys = map[IntKey]DynamicInt{
 		DefaultValue: 0,
 	},
 	ReplicatorCacheMaxSize: {
-		KeyName:      "history.replicatorCacheSize",
+		KeyName:      "history.replicatorCacheMaxSize",
 		Description:  "ReplicatorCacheMaxSize is the max size of the replication cache in bytes",
+		DefaultValue: 0,
+	},
+	ReplicationBudgetManagerMaxSizeBytes: {
+		KeyName:      "history.replicationBudgetManagerMaxSizeBytes",
+		Description:  "ReplicationBudgetManagerMaxSizeBytes is the max size of the replication budget manager cache in bytes",
+		DefaultValue: 0,
+	},
+	ReplicationBudgetManagerMaxSizeCount: {
+		KeyName:      "history.replicationBudgetManagerMaxSizeCount",
+		Description:  "ReplicationBudgetManagerMaxSizeCount is the max count of the replication budget manager cache",
 		DefaultValue: 0,
 	},
 	ExecutionMgrNumConns: {
@@ -4173,6 +4216,11 @@ var BoolKeys = map[BoolKey]DynamicBool{
 		KeyName:      "system.enableGracefulFailover",
 		Description:  "EnableGracefulFailover is whether enabling graceful failover",
 		DefaultValue: true,
+	},
+	EnableDomainAuditLogging: {
+		KeyName:      "system.enableDomainAuditLogging",
+		Description:  "EnableDomainAuditLogging enables audit logging for a domain to the domain audit log table",
+		DefaultValue: false,
 	},
 	DisallowQuery: {
 		KeyName:      "system.disallowQuery",
@@ -4694,6 +4742,12 @@ var BoolKeys = map[BoolKey]DynamicBool{
 		Filters:      []Filter{ShardID},
 		DefaultValue: false,
 	},
+	EnableActiveClusterSelectionPolicyInStartWorkflow: {
+		KeyName:      "frontend.enableActiveClusterSelectionPolicyInStartWorkflow",
+		Description:  "EnableActiveClusterSelectionPolicyInStartWorkflow is to enable active cluster selection policy in start workflow requests for a domain",
+		DefaultValue: false,
+		Filters:      []Filter{DomainName},
+	},
 }
 
 var FloatKeys = map[FloatKey]DynamicFloat{
@@ -4819,6 +4873,11 @@ var FloatKeys = map[FloatKey]DynamicFloat{
 		KeyName:      "history.errorInjectionRate",
 		Description:  "HistoryErrorInjectionRate is rate for injecting random error in history client",
 		DefaultValue: 0,
+	},
+	ReplicationBudgetManagerSoftCapThreshold: {
+		KeyName:      "history.replicationBudgetManagerSoftCapThreshold",
+		Description:  "ReplicationBudgetManagerSoftCapThreshold is the soft cap threshold for the replication budget manager cache (0.0 to 1.0)",
+		DefaultValue: 1.0,
 	},
 	ReplicationTaskFetcherTimerJitterCoefficient: {
 		KeyName:      "history.ReplicationTaskFetcherTimerJitterCoefficient",
@@ -4956,7 +5015,7 @@ var StringKeys = map[StringKey]DynamicString{
 	MigrationMode: {
 		KeyName:      "shardDistributor.migrationMode",
 		Description:  "MigrationMode is the mode the at represent the state of the migration to rely on shard distributor for the sharding mechanism",
-		DefaultValue: "local_pass",
+		DefaultValue: "onboarded",
 		Filters:      []Filter{Namespace},
 	},
 }
@@ -5438,6 +5497,12 @@ var DurationKeys = map[DurationKey]DynamicDuration{
 		Filters:      []Filter{DomainName, TaskListName, TaskType},
 		Description:  "TaskIsolationDuration is the time period for which we attempt to respect tasklist isolation before allowing any poller to process the task",
 		DefaultValue: time.Second * 2,
+	},
+	DomainAuditLogTTL: {
+		KeyName:      "system.domainAuditLogTTL",
+		Filters:      []Filter{DomainID},
+		Description:  "DomainAuditLogTTL is the TTL for domain audit log entries",
+		DefaultValue: time.Hour * 24 * 365, // 1 year
 	},
 }
 
