@@ -30,12 +30,12 @@ var (
 )
 
 type executorStoreImpl struct {
-	client      *clientv3.Client
-	prefix      string
-	logger      log.Logger
-	shardCache  *shardcache.ShardToExecutorCache
-	timeSource  clock.TimeSource
-	compression string
+	client       *clientv3.Client
+	prefix       string
+	logger       log.Logger
+	shardCache   *shardcache.ShardToExecutorCache
+	timeSource   clock.TimeSource
+	recordWriter *common.RecordWriter
 }
 
 // shardStatisticsUpdate holds the staged statistics for a shard so we can write them
@@ -90,13 +90,18 @@ func NewStore(p ExecutorStoreParams) (store.Store, error) {
 		timeSource = clock.NewRealTimeSource()
 	}
 
+	recordWriter, err := common.NewRecordWriter(etcdCfg.Compression)
+	if err != nil {
+		return nil, fmt.Errorf("create record writer: %w", err)
+	}
+
 	store := &executorStoreImpl{
-		client:      etcdClient,
-		prefix:      etcdCfg.Prefix,
-		logger:      p.Logger,
-		shardCache:  shardCache,
-		timeSource:  timeSource,
-		compression: etcdCfg.Compression,
+		client:       etcdClient,
+		prefix:       etcdCfg.Prefix,
+		logger:       p.Logger,
+		shardCache:   shardCache,
+		timeSource:   timeSource,
+		recordWriter: recordWriter,
 	}
 
 	p.Lifecycle.Append(fx.StartStopHook(store.Start, store.Stop))
@@ -131,12 +136,12 @@ func (s *executorStoreImpl) RecordHeartbeat(ctx context.Context, namespace, exec
 	}
 
 	// Compress data before writing to etcd
-	compressedReportedShards, err := common.Compress(reportedShardsData, s.compression)
+	compressedReportedShards, err := s.recordWriter.Write(reportedShardsData)
 	if err != nil {
 		return fmt.Errorf("compress reported shards: %w", err)
 	}
 
-	compressedState, err := common.Compress(jsonState, s.compression)
+	compressedState, err := s.recordWriter.Write(jsonState)
 	if err != nil {
 		return fmt.Errorf("compress assigned state: %w", err)
 	}
@@ -372,7 +377,7 @@ func (s *executorStoreImpl) AssignShards(ctx context.Context, namespace string, 
 			return fmt.Errorf("marshal assigned shards for executor %s: %w", executorID, err)
 		}
 
-		compressedValue, err := common.Compress(value, s.compression)
+		compressedValue, err := s.recordWriter.Write(value)
 		if err != nil {
 			return fmt.Errorf("compress assigned shards for executor %s: %w", executorID, err)
 		}
@@ -515,7 +520,7 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 		if err != nil {
 			return fmt.Errorf("marshal new assigned state: %w", err)
 		}
-		compressedStateValue, err := common.Compress(newStateValue, s.compression)
+		compressedStateValue, err := s.recordWriter.Write(newStateValue)
 		if err != nil {
 			return fmt.Errorf("compress new assigned state: %w", err)
 		}
@@ -524,7 +529,7 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 		if err != nil {
 			return fmt.Errorf("marshal new shard statistics: %w", err)
 		}
-		compressedStatsValue, err := common.Compress(newStatsValue, s.compression)
+		compressedStatsValue, err := s.recordWriter.Write(newStatsValue)
 		if err != nil {
 			return fmt.Errorf("compress new shard statistics: %w", err)
 		}

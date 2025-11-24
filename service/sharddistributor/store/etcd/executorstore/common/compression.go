@@ -20,26 +20,46 @@ const (
 	CompressionSnappy = "snappy"
 )
 
-// Compress encodes data using the compression library identified by compressionType
-// When compressionType is empty or "none", the data is returned as-is
-func Compress(data []byte, compressionType string) ([]byte, error) {
+type compressionMode int
+
+const (
+	compressionNone compressionMode = iota
+	compressionSnappy
+)
+
+// RecordWriter handles serialization of data for etcd, applying compression when configured.
+type RecordWriter struct {
+	mode compressionMode
+}
+
+// NewRecordWriter constructs a RecordWriter based on the configured compression type.
+func NewRecordWriter(compressionType string) (*RecordWriter, error) {
 	switch strings.ToLower(compressionType) {
 	case "", "none":
-		return data, nil
+		return &RecordWriter{mode: compressionNone}, nil
 	case CompressionSnappy:
-		var buf bytes.Buffer
-		w := snappy.NewBufferedWriter(&buf)
-
-		if _, err := w.Write(data); err != nil {
-			return nil, err
-		}
-		if err := w.Close(); err != nil {
-			return nil, err
-		}
-		return buf.Bytes(), nil
+		return &RecordWriter{mode: compressionSnappy}, nil
 	default:
 		return nil, fmt.Errorf("unsupported compression type: %s", compressionType)
 	}
+}
+
+// Write serializes data using the configured compression mode.
+func (w *RecordWriter) Write(data []byte) ([]byte, error) {
+	if w.mode == compressionNone {
+		return data, nil
+	}
+
+	var buf bytes.Buffer
+	writer := snappy.NewBufferedWriter(&buf)
+
+	if _, err := writer.Write(data); err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // Decompress decodes snappy-compressed data

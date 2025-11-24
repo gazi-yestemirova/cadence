@@ -429,7 +429,9 @@ func TestSubscribe(t *testing.T) {
 	// Now update the reported shards, which IS a significant change
 	reportedShardsKey := etcdkeys.BuildExecutorKey(tc.EtcdPrefix, tc.Namespace, executorID, "reported_shards")
 	require.NoError(t, err)
-	compressedShards, err := common.Compress([]byte(`{"shard-1":{"status":"running"}}`), tc.Compression)
+	writer, err := common.NewRecordWriter(tc.Compression)
+	require.NoError(t, err)
+	compressedShards, err := writer.Write([]byte(`{"shard-1":{"status":"running"}}`))
 	require.NoError(t, err)
 	_, err = tc.Client.Put(ctx, reportedShardsKey, string(compressedShards))
 	require.NoError(t, err)

@@ -416,7 +416,7 @@ func TestHeartbeat(t *testing.T) {
 			Status:     types.ExecutorStatusACTIVE,
 		}
 		previousHeartbeat := store.HeartbeatState{
-			LastHeartbeat: now.Unix(),
+			LastHeartbeat: now.UTC(),
 			Status:        types.ExecutorStatusACTIVE,
 		}
 

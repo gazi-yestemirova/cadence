@@ -8,37 +8,45 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCompress(t *testing.T) {
+func TestRecordWriter(t *testing.T) {
 	original := []byte("test-data")
 
-	t.Run("No compression when empty", func(t *testing.T) {
-		compressed, err := Compress(original, "")
+	t.Run("no compression when empty", func(t *testing.T) {
+		writer, err := NewRecordWriter("")
 		require.NoError(t, err)
-		assert.Equal(t, original, compressed)
+
+		out, err := writer.Write(original)
+		require.NoError(t, err)
+		assert.Equal(t, original, out)
 	})
 
-	t.Run("No compression when none", func(t *testing.T) {
-		compressed, err := Compress(original, "none")
+	t.Run("no compression when none", func(t *testing.T) {
+		writer, err := NewRecordWriter("none")
 		require.NoError(t, err)
-		assert.Equal(t, original, compressed)
+
+		out, err := writer.Write(original)
+		require.NoError(t, err)
+		assert.Equal(t, original, out)
 	})
 
-	t.Run("Snappy compression", func(t *testing.T) {
-		compressed, err := Compress(original, CompressionSnappy)
+	t.Run("snappy compression", func(t *testing.T) {
+		writer, err := NewRecordWriter(CompressionSnappy)
 		require.NoError(t, err)
-		require.NotNil(t, compressed)
-		assert.NotEqual(t, original, compressed)
 
-		decompressed, err := Decompress(compressed)
+		out, err := writer.Write(original)
+		require.NoError(t, err)
+		require.NotNil(t, out)
+		assert.NotEqual(t, original, out)
+
+		decompressed, err := Decompress(out)
 		require.NoError(t, err)
 		assert.Equal(t, original, decompressed)
 	})
 
-	t.Run("Unsupported compression", func(t *testing.T) {
-		compressed, err := Compress(original, "unsupported")
+	t.Run("unsupported compression", func(t *testing.T) {
+		writer, err := NewRecordWriter("unsupported")
 		require.Error(t, err)
-		assert.Nil(t, compressed)
-		assert.Contains(t, err.Error(), "unsupported compression type")
+		assert.Nil(t, writer)
 	})
 }
 
@@ -70,7 +78,10 @@ func TestDecompress(t *testing.T) {
 
 	t.Run("Compressed data", func(t *testing.T) {
 		original := []byte(`{"status":"DRAINING"}`)
-		compressed, err := Compress(original, CompressionSnappy)
+		writer, err := NewRecordWriter(CompressionSnappy)
+		require.NoError(t, err)
+
+		compressed, err := writer.Write(original)
 		require.NoError(t, err)
 
 		result, err := Decompress(compressed)
@@ -106,7 +117,10 @@ func TestDecompressAndUnmarshal(t *testing.T) {
 			Shards: []string{"shard3", "shard4"},
 		}
 		originalJSON, _ := json.Marshal(original)
-		compressed, err := Compress(originalJSON, CompressionSnappy)
+		writer, err := NewRecordWriter(CompressionSnappy)
+		require.NoError(t, err)
+
+		compressed, err := writer.Write(originalJSON)
 		require.NoError(t, err)
 
 		var result testData
