@@ -278,7 +278,6 @@ func (s *executorStoreImpl) GetState(ctx context.Context, namespace string) (*st
 	if err != nil {
 		return nil, fmt.Errorf("get shard data: %w", err)
 	}
-
 	for _, kv := range shardResp.Kvs {
 		shardID, shardKeyType, err := etcdkeys.ParseShardKey(s.prefix, namespace, string(kv.Key))
 		if err != nil {
