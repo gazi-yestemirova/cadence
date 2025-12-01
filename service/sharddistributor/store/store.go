@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -46,6 +47,16 @@ func NopGuard() GuardFunc {
 	return func(txn Txn) (Txn, error) {
 		return txn, nil
 	}
+}
+
+// IsContextCancellation reports whether the provided error indicates the caller's context
+// has been cancelled or its deadline has been exceeded.
+func IsContextCancellation(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded)
 }
 
 // AssignShardsRequest is a request to assign shards to executors, and remove unused shards.

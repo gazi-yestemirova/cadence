@@ -215,7 +215,7 @@ func (p *namespaceProcessor) runRebalancingLoop(ctx context.Context) {
 			err = p.rebalanceShards(ctx)
 		}
 		if err != nil {
-			if isCancelledOrDeadlineExceeded(err) {
+			if store.IsContextCancellation(err) {
 				return
 			}
 			p.logger.Error("rebalance failed", tag.Error(err))
@@ -237,7 +237,7 @@ func (p *namespaceProcessor) runShardStatsCleanupLoop(ctx context.Context) {
 			p.logger.Info("Periodic shard stats cleanup triggered.")
 			namespaceState, err := p.shardStore.GetState(ctx, p.namespaceCfg.Name)
 			if err != nil {
-				if isCancelledOrDeadlineExceeded(err) {
+				if store.IsContextCancellation(err) {
 					return
 				}
 				p.logger.Error("Failed to get state for shard stats cleanup", tag.Error(err))
@@ -249,7 +249,7 @@ func (p *namespaceProcessor) runShardStatsCleanupLoop(ctx context.Context) {
 				continue
 			}
 			if err := p.shardStore.DeleteShardStats(ctx, p.namespaceCfg.Name, staleShardStats, p.election.Guard()); err != nil {
-				if isCancelledOrDeadlineExceeded(err) {
+				if store.IsContextCancellation(err) {
 					return
 				}
 				p.logger.Error("Failed to delete stale shard stats", tag.Error(err))
@@ -349,7 +349,7 @@ func (p *namespaceProcessor) rebalanceShards(ctx context.Context) (err error) {
 func (p *namespaceProcessor) rebalanceShardsImpl(ctx context.Context, metricsLoopScope metrics.Scope) (err error) {
 	namespaceState, err := p.shardStore.GetState(ctx, p.namespaceCfg.Name)
 	if err != nil {
-		if isCancelledOrDeadlineExceeded(err) {
+		if store.IsContextCancellation(err) {
 			return err
 		}
 		return fmt.Errorf("get state: %w", err)
@@ -398,7 +398,7 @@ func (p *namespaceProcessor) rebalanceShardsImpl(ctx context.Context, metricsLoo
 		ExecutorsToDelete: staleExecutors,
 	}, p.election.Guard())
 	if err != nil {
-		if isCancelledOrDeadlineExceeded(err) {
+		if store.IsContextCancellation(err) {
 			return err
 		}
 		return fmt.Errorf("assign shards: %w", err)
@@ -678,9 +678,4 @@ func makeShards(num int64) []string {
 		shards[i] = strconv.FormatInt(i, 10)
 	}
 	return shards
-}
-
-func isCancelledOrDeadlineExceeded(err error) bool {
-	return errors.Is(err, context.Canceled) ||
-		errors.Is(err, context.DeadlineExceeded)
 }
