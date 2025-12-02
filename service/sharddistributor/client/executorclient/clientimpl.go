@@ -34,7 +34,8 @@ const (
 )
 
 const (
-	heartbeatJitterCoeff = 0.1 // 10% jitter
+	heartbeatJitterCoeff     = 0.1 // 10% jitter
+	drainingHeartbeatTimeout = 5 * time.Second
 )
 
 type managedProcessor[SP ShardProcessor] struct {
@@ -197,6 +198,7 @@ func (e *executorImpl[SP]) heartbeatloop(ctx context.Context) {
 		case <-e.stopC:
 			e.logger.Info("shard distributorexecutor stopped")
 			e.stopShardProcessors()
+			e.sendDrainingHeartbeat()
 			return
 		case <-heartBeatTimer.Chan():
 			heartBeatTimer.Reset(backoff.JitDuration(e.heartBeatInterval, heartbeatJitterCoeff))
@@ -269,6 +271,10 @@ func (e *executorImpl[SP]) updateShardAssignmentMetered(ctx context.Context, sha
 }
 
 func (e *executorImpl[SP]) heartbeat(ctx context.Context) (shardAssignments map[string]*types.ShardAssignment, migrationMode types.MigrationMode, err error) {
+	return e.sendHeartbeat(ctx, types.ExecutorStatusACTIVE)
+}
+
+func (e *executorImpl[SP]) sendHeartbeat(ctx context.Context, status types.ExecutorStatus) (map[string]*types.ShardAssignment, types.MigrationMode, error) {
 	// Fill in the shard status reports
 	shardStatusReports := make(map[string]*types.ShardStatusReport)
 	e.managedProcessors.Range(func(shardID string, managedProcessor *managedProcessor[SP]) bool {
@@ -289,7 +295,7 @@ func (e *executorImpl[SP]) heartbeat(ctx context.Context) (shardAssignments map[
 	request := &types.ExecutorHeartbeatRequest{
 		Namespace:          e.namespace,
 		ExecutorID:         e.executorID,
-		Status:             types.ExecutorStatusACTIVE,
+		Status:             status,
 		ShardStatusReports: shardStatusReports,
 		Metadata:           e.metadata.Get(),
 	}
@@ -312,6 +318,16 @@ func (e *executorImpl[SP]) heartbeat(ctx context.Context) (shardAssignments map[
 	}
 
 	return response.ShardAssignments, response.MigrationMode, nil
+}
+
+func (e *executorImpl[SP]) sendDrainingHeartbeat() {
+	ctx, cancel := context.WithTimeout(context.Background(), drainingHeartbeatTimeout)
+	defer cancel()
+
+	_, _, err := e.sendHeartbeat(ctx, types.ExecutorStatusDRAINING)
+	if err != nil {
+		e.logger.Error("failed to send draining heartbeat", tag.Error(err))
+	}
 }
 
 func (e *executorImpl[SP]) updateShardAssignment(ctx context.Context, shardAssignments map[string]*types.ShardAssignment) {
