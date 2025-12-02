@@ -11,6 +11,7 @@ import (
 	"github.com/uber-go/tally"
 	"go.uber.org/goleak"
 	"go.uber.org/mock/gomock"
+	yarpc "go.uber.org/yarpc"
 
 	"github.com/uber/cadence/client/sharddistributorexecutor"
 	"github.com/uber/cadence/common/clock"
@@ -19,30 +20,13 @@ import (
 	"github.com/uber/cadence/service/sharddistributor/client/executorclient/syncgeneric"
 )
 
-type heartbeatStatusMatcher struct {
-	status types.ExecutorStatus
-}
-
-func (m heartbeatStatusMatcher) Matches(x interface{}) bool {
-	req, ok := x.(*types.ExecutorHeartbeatRequest)
-	if !ok || req == nil {
-		return false
-	}
-	return req.Status == m.status
-}
-
-func (m heartbeatStatusMatcher) String() string {
-	return fmt.Sprintf("heartbeat request with status %v", m.status)
-}
-
-func heartbeatWithStatus(status types.ExecutorStatus) gomock.Matcher {
-	return heartbeatStatusMatcher{status: status}
-}
-
-func expectDrainingHeartbeat(mockClient *sharddistributorexecutor.MockClient) {
+func expectDrainingHeartbeat(t *testing.T, mockClient *sharddistributorexecutor.MockClient) {
 	mockClient.EXPECT().
-		Heartbeat(gomock.Any(), heartbeatWithStatus(types.ExecutorStatusDRAINING), gomock.Any()).
-		Return(&types.ExecutorHeartbeatResponse{}, nil)
+		Heartbeat(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, req *types.ExecutorHeartbeatRequest, _ ...yarpc.CallOption) (*types.ExecutorHeartbeatResponse, error) {
+			assert.Equal(t, types.ExecutorStatusDRAINING, req.Status)
+			return &types.ExecutorHeartbeatResponse{}, nil
+		})
 }
 
 func newTestExecutor(
@@ -92,7 +76,7 @@ func TestHeartBeatLoop(t *testing.T) {
 			},
 			MigrationMode: types.MigrationModeONBOARDED,
 		}, nil)
-	expectDrainingHeartbeat(mockShardDistributorClient)
+	expectDrainingHeartbeat(t, mockShardDistributorClient)
 
 	// The two shards are assigned to the executor, so we expect them to be created, started and stopped
 	mockShardProcessor1 := NewMockShardProcessor(ctrl)
@@ -468,7 +452,7 @@ func TestHeartbeatLoop_LocalPassthroughShadow_SkipsAssignment(t *testing.T) {
 			},
 			MigrationMode: types.MigrationModeLOCALPASSTHROUGHSHADOW,
 		}, nil)
-	expectDrainingHeartbeat(mockShardDistributorClient)
+	expectDrainingHeartbeat(t, mockShardDistributorClient)
 
 	mockShardProcessorFactory := NewMockShardProcessorFactory[*MockShardProcessor](ctrl)
 	// No shard processor should be created
@@ -505,7 +489,7 @@ func TestHeartbeatLoop_DistributedPassthrough_AppliesAssignment(t *testing.T) {
 			},
 			MigrationMode: types.MigrationModeDISTRIBUTEDPASSTHROUGH,
 		}, nil)
-	expectDrainingHeartbeat(mockShardDistributorClient)
+	expectDrainingHeartbeat(t, mockShardDistributorClient)
 
 	mockShardProcessor := NewMockShardProcessor(ctrl)
 	mockShardProcessor.EXPECT().Start(gomock.Any())
@@ -538,7 +522,7 @@ func TestHeartbeatLoop_StopSignalSendsDrainingHeartbeat(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockShardDistributorClient := sharddistributorexecutor.NewMockClient(ctrl)
-	expectDrainingHeartbeat(mockShardDistributorClient)
+	expectDrainingHeartbeat(t, mockShardDistributorClient)
 
 	mockTimeSource := clock.NewMockedTimeSource()
 
@@ -562,7 +546,7 @@ func TestHeartbeatLoop_ContextCancelDoesNotSendDrainingHeartbeat(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockShardDistributorClient := sharddistributorexecutor.NewMockClient(ctrl)
-	expectDrainingHeartbeat(mockShardDistributorClient)
+	expectDrainingHeartbeat(t, mockShardDistributorClient)
 
 	mockTimeSource := clock.NewMockedTimeSource()
 
