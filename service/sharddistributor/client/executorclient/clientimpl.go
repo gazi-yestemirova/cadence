@@ -192,11 +192,12 @@ func (e *executorImpl[SP]) heartbeatloop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			e.logger.Info("shard distributorexecutor context done, stopping")
+			e.logger.Info("shard distributor executor context done, stopping")
 			e.stopShardProcessors()
+			e.sendDrainingHeartbeat()
 			return
 		case <-e.stopC:
-			e.logger.Info("shard distributorexecutor stopped")
+			e.logger.Info("shard distributor executor stopped")
 			e.stopShardProcessors()
 			e.sendDrainingHeartbeat()
 			return
