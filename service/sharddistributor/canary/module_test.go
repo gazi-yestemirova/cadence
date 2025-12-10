@@ -24,8 +24,10 @@ import (
 )
 
 func TestModule(t *testing.T) {
+	// Create mocks
 	ctrl := gomock.NewController(t)
 	uberCtrl := ubergomock.NewController(t)
+	mockLogger := log.NewNoop()
 
 	mockClientConfig := transporttest.NewMockClientConfig(ctrl)
 	transport := grpc.NewTransport()
@@ -38,7 +40,7 @@ func TestModule(t *testing.T) {
 	mockClientConfigProvider := transporttest.NewMockClientConfigProvider(ctrl)
 	mockClientConfigProvider.EXPECT().ClientConfig("cadence-shard-distributor").Return(mockClientConfig).AnyTimes()
 
-	// Use the shared mock from executorclient package
+	// Create executor yarpc client mock
 	mockYARPCClient := executorclient.NewMockShardDistributorExecutorAPIYARPCClient(uberCtrl)
 	mockYARPCClient.EXPECT().
 		Heartbeat(ubergomock.Any(), ubergomock.Any(), ubergomock.Any()).
@@ -56,6 +58,7 @@ func TestModule(t *testing.T) {
 		},
 	}
 
+	// Create a mock dispatcher with the required outbound
 	dispatcher := yarpc.NewDispatcher(yarpc.Config{
 		Name: "test-canary",
 		Outbounds: yarpc.Outbounds{
@@ -65,18 +68,19 @@ func TestModule(t *testing.T) {
 		},
 	})
 
+	// Create a test app with the library, check that it starts and stops
 	fxtest.New(t,
 		fx.Supply(
 			fx.Annotate(tally.NoopScope, fx.As(new(tally.Scope))),
 			fx.Annotate(clock.NewMockedTimeSource(), fx.As(new(clock.TimeSource))),
-			fx.Annotate(log.NewNoop(), fx.As(new(log.Logger))),
+			fx.Annotate(mockLogger, fx.As(new(log.Logger))),
 			fx.Annotate(mockClientConfigProvider, fx.As(new(yarpc.ClientConfig))),
 			fx.Annotate(transport, fx.As(new(peer.Transport))),
 			zaptest.NewLogger(t),
 			config,
 			dispatcher,
 		),
-		// Replacing the real YARPC client with mock to handle the heartbeat
+		// Replacing the real YARPC client with mock to handle the draining heartbeat
 		fx.Decorate(func() sharddistributorv1.ShardDistributorExecutorAPIYARPCClient {
 			return mockYARPCClient
 		}),

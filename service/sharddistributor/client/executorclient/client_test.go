@@ -17,7 +17,9 @@ import (
 
 func TestModule(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	mockLogger := log.NewNoop()
 
+	// Create executor yarpc client mock
 	mockYARPCClient := NewMockShardDistributorExecutorAPIYARPCClient(ctrl)
 	mockYARPCClient.EXPECT().
 		Heartbeat(gomock.Any(), gomock.Any(), gomock.Any()).
@@ -26,6 +28,7 @@ func TestModule(t *testing.T) {
 
 	mockShardProcessorFactory := NewMockShardProcessorFactory[*MockShardProcessor](ctrl)
 
+	// Example config
 	config := clientcommon.Config{
 		Namespaces: []clientcommon.NamespaceConfig{
 			{
@@ -35,11 +38,12 @@ func TestModule(t *testing.T) {
 		},
 	}
 
+	// Create a test app with the library, check that it starts and stops
 	fxtest.New(t,
 		fx.Supply(
 			fx.Annotate(mockYARPCClient, fx.As(new(sharddistributorv1.ShardDistributorExecutorAPIYARPCClient))),
 			fx.Annotate(tally.NoopScope, fx.As(new(tally.Scope))),
-			fx.Annotate(log.NewNoop(), fx.As(new(log.Logger))),
+			fx.Annotate(mockLogger, fx.As(new(log.Logger))),
 			fx.Annotate(mockShardProcessorFactory, fx.As(new(ShardProcessorFactory[*MockShardProcessor]))),
 			fx.Annotate(clock.NewMockedTimeSource(), fx.As(new(clock.TimeSource))),
 			config,
@@ -59,7 +63,9 @@ type MockShardProcessor2 struct {
 
 func TestModuleWithNamespace(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	mockLogger := log.NewNoop()
 
+	// Create executor yarpc client mock
 	mockYARPCClient := NewMockShardDistributorExecutorAPIYARPCClient(ctrl)
 	mockYARPCClient.EXPECT().
 		Heartbeat(gomock.Any(), gomock.Any(), gomock.Any()).
@@ -69,6 +75,7 @@ func TestModuleWithNamespace(t *testing.T) {
 	mockFactory1 := NewMockShardProcessorFactory[*MockShardProcessor1](ctrl)
 	mockFactory2 := NewMockShardProcessorFactory[*MockShardProcessor2](ctrl)
 
+	// Multi-namespace config
 	config := clientcommon.Config{
 		Namespaces: []clientcommon.NamespaceConfig{
 			{
@@ -82,16 +89,18 @@ func TestModuleWithNamespace(t *testing.T) {
 		},
 	}
 
+	// Create a test app with two namespace-specific modules using different processor types
 	fxtest.New(t,
 		fx.Supply(
 			fx.Annotate(mockYARPCClient, fx.As(new(sharddistributorv1.ShardDistributorExecutorAPIYARPCClient))),
 			fx.Annotate(tally.NoopScope, fx.As(new(tally.Scope))),
-			fx.Annotate(log.NewNoop(), fx.As(new(log.Logger))),
+			fx.Annotate(mockLogger, fx.As(new(log.Logger))),
 			fx.Annotate(clock.NewMockedTimeSource(), fx.As(new(clock.TimeSource))),
 			fx.Annotate(mockFactory1, fx.As(new(ShardProcessorFactory[*MockShardProcessor1]))),
 			fx.Annotate(mockFactory2, fx.As(new(ShardProcessorFactory[*MockShardProcessor2]))),
 			config,
 		),
+		// Two namespace-specific modules with different processor types
 		ModuleWithNamespace[*MockShardProcessor1]("namespace1"),
 		ModuleWithNamespace[*MockShardProcessor2]("namespace2"),
 	).RequireStart().RequireStop()
