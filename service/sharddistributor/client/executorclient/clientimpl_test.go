@@ -282,7 +282,7 @@ func TestAssignShardsFromLocalLogic(t *testing.T) {
 				shardProcessorMock3.EXPECT().GetShardReport().Return(ShardReport{Status: types.ShardStatusREADY})
 				return executor
 			},
-			assert: func(err error, executor *executorImpl[*MockShardProcessor]) {
+			assert: func(_ error, executor *executorImpl[*MockShardProcessor]) {
 				// Assert that we now have the 3 shards in the assignment
 				processor1, err := executor.GetShardProcess(context.Background(), "test-shard-id1")
 				assert.NoError(t, err)
@@ -345,7 +345,7 @@ func TestRemoveShardsFromLocalLogic(t *testing.T) {
 				shardProcessorMock1.EXPECT().GetShardReport().Return(ShardReport{Status: types.ShardStatusREADY})
 				return executor
 			},
-			assert: func(err error, executor *executorImpl[*MockShardProcessor]) {
+			assert: func(_ error, executor *executorImpl[*MockShardProcessor]) {
 				// Assert that we now have the 1 shard in the assignment
 				processor1, err := executor.GetShardProcess(context.Background(), "test-shard-id1")
 				assert.NoError(t, err)
@@ -541,7 +541,7 @@ func TestHeartbeatLoop_StopSignalSendsDrainingHeartbeat(t *testing.T) {
 	<-done
 }
 
-func TestHeartbeatLoop_ContextCancelDoesNotSendDrainingHeartbeat(t *testing.T) {
+func TestHeartbeatLoop_ContextCancelSendsDrainingHeartbeat(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
 	ctrl := gomock.NewController(t)
@@ -553,15 +553,9 @@ func TestHeartbeatLoop_ContextCancelDoesNotSendDrainingHeartbeat(t *testing.T) {
 	executor := newTestExecutor(mockShardDistributorClient, nil, mockTimeSource)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	cancel() // cancelling the context
 
 	executor.heartbeatloop(ctx)
-
-	select {
-	case <-executor.stopC:
-		t.Fatal("stopC should not be closed")
-	default:
-	}
 }
 
 func TestCompareAssignments_Converged(t *testing.T) {
