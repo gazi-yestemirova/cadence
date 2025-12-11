@@ -306,9 +306,7 @@ func (e *executorImpl[SP]) sendHeartbeat(ctx context.Context, status types.Execu
 	}
 
 	// Send the request
-	fmt.Println("sending the heartbeat+++")
 	response, err := e.shardDistributorClient.Heartbeat(ctx, request)
-	fmt.Println("response", response, err)
 	if err != nil {
 		return nil, types.MigrationModeINVALID, fmt.Errorf("send heartbeat: %w", err)
 	}
