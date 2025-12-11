@@ -57,16 +57,74 @@ func (h *executor) Heartbeat(ctx context.Context, request *types.ExecutorHeartbe
 
 	heartbeatTime := h.timeSource.Now().UTC()
 	mode := h.migrationConfiguration.GetMigrationMode(request.Namespace)
+
+	// Handle draining executor separately
+	if request.Status == types.ExecutorStatusDRAINING {
+		return h.handleDrainingHeartbeat(ctx, request, heartbeatTime, mode)
+	}
+
+	return h.handleActiveHeartbeat(ctx, request, previousHeartbeat, assignedShards, heartbeatTime, mode)
+}
+
+// handleDrainingHeartbeat handles heartbeats from executors that are shutting down.
+// It clears their shard assignments, so they can be reassigned to other executors.
+func (h *executor) handleDrainingHeartbeat(
+	ctx context.Context,
+	request *types.ExecutorHeartbeatRequest,
+	heartbeatTime time.Time,
+	mode types.MigrationMode,
+) (*types.ExecutorHeartbeatResponse, error) {
+	h.logger.Info("Executor is draining, clearing shard assignments",
+		tag.ShardNamespace(request.Namespace),
+		tag.ShardExecutor(request.ExecutorID))
+
+	if err := h.storage.DeleteExecutors(ctx, request.Namespace, []string{request.ExecutorID}, store.NopGuard()); err != nil {
+		h.logger.Error("Failed to delete draining executor's assignments",
+			tag.ShardNamespace(request.Namespace),
+			tag.ShardExecutor(request.ExecutorID),
+			tag.Error(err))
+		// Continue anyway - the leader will eventually reassign the shards
+	}
+
+	drainingHeartbeat := store.HeartbeatState{
+		LastHeartbeat:  heartbeatTime,
+		Status:         request.Status,
+		ReportedShards: request.ShardStatusReports,
+		Metadata:       request.GetMetadata(),
+	}
+	if err := h.storage.RecordHeartbeat(ctx, request.Namespace, request.ExecutorID, drainingHeartbeat); err != nil {
+		return nil, &types.InternalServiceError{Message: fmt.Sprintf("failed to record draining heartbeat: %v", err)}
+	}
+
+	// Return empty assignment - executor should stop all shards
+	return &types.ExecutorHeartbeatResponse{
+		ShardAssignments: make(map[string]*types.ShardAssignment),
+		MigrationMode:    mode,
+	}, nil
+}
+
+// handleActiveHeartbeat handles heartbeats from active executors.
+func (h *executor) handleActiveHeartbeat(
+	ctx context.Context,
+	request *types.ExecutorHeartbeatRequest,
+	previousHeartbeat *store.HeartbeatState,
+	assignedShards *store.AssignedState,
+	heartbeatTime time.Time,
+	mode types.MigrationMode,
+) (*types.ExecutorHeartbeatResponse, error) {
 	shardAssignedInBackground := true
 
 	switch mode {
 	case types.MigrationModeINVALID:
-		return nil, &types.InternalServiceError{Message: fmt.Sprintf("namespace's migration mode is invalid: %v", err)}
+		return nil, &types.InternalServiceError{Message: "namespace's migration mode is invalid"}
 	case types.MigrationModeLOCALPASSTHROUGH:
-		h.logger.Warn("Migration mode is local passthrough, no calls to heartbeat allowed", tag.ShardNamespace(request.Namespace), tag.ShardExecutor(request.ExecutorID))
+		h.logger.Warn("Migration mode is local passthrough, no calls to heartbeat allowed",
+			tag.ShardNamespace(request.Namespace),
+			tag.ShardExecutor(request.ExecutorID))
 		return nil, &types.BadRequestError{Message: "migration mode is local passthrough, no calls to heartbeat allowed"}
 	// From SD perspective the behaviour is the same
 	case types.MigrationModeLOCALPASSTHROUGHSHADOW, types.MigrationModeDISTRIBUTEDPASSTHROUGH:
+		var err error
 		assignedShards, err = h.assignShardsInCurrentHeartbeat(ctx, request)
 		if err != nil {
 			return nil, err
@@ -85,7 +143,7 @@ func (h *executor) Heartbeat(ctx context.Context, request *types.ExecutorHeartbe
 		return nil, types.BadRequestError{Message: fmt.Sprintf("invalid metadata: %s", err)}
 	}
 
-	err = h.storage.RecordHeartbeat(ctx, request.Namespace, request.ExecutorID, newHeartbeat)
+	err := h.storage.RecordHeartbeat(ctx, request.Namespace, request.ExecutorID, newHeartbeat)
 	if err != nil {
 		return nil, &types.InternalServiceError{Message: fmt.Sprintf("failed to record heartbeat: %v", err)}
 	}

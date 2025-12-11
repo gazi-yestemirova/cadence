@@ -82,7 +82,7 @@ func TestHeartbeat(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	// Test Case 3: Status Change (with update)
+	// Test Case 3: Status Change to DRAINING - executor's assignments should be cleared
 	t.Run("StatusChange", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockStore := store.NewMockStore(ctrl)
@@ -94,7 +94,7 @@ func TestHeartbeat(t *testing.T) {
 		req := &types.ExecutorHeartbeatRequest{
 			Namespace:  namespace,
 			ExecutorID: executorID,
-			Status:     types.ExecutorStatusDRAINING, // Status changed
+			Status:     types.ExecutorStatusDRAINING, // Status changed to draining
 		}
 
 		previousHeartbeat := store.HeartbeatState{
@@ -103,13 +103,18 @@ func TestHeartbeat(t *testing.T) {
 		}
 
 		mockStore.EXPECT().GetHeartbeat(gomock.Any(), namespace, executorID).Return(&previousHeartbeat, nil, nil)
+		// Draining executor's assignments should be deleted
+		mockStore.EXPECT().DeleteExecutors(gomock.Any(), namespace, []string{executorID}, gomock.Any()).Return(nil)
 		mockStore.EXPECT().RecordHeartbeat(gomock.Any(), namespace, executorID, store.HeartbeatState{
 			LastHeartbeat: now,
 			Status:        types.ExecutorStatusDRAINING,
 		})
 
-		_, err := handler.Heartbeat(ctx, req)
+		resp, err := handler.Heartbeat(ctx, req)
 		require.NoError(t, err)
+		// Response should have empty shard assignments
+		require.NotNil(t, resp)
+		require.Empty(t, resp.ShardAssignments)
 	})
 
 	// Test Case 4: Storage Error
