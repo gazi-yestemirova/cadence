@@ -12,10 +12,7 @@ package resource
 import (
 	reflect "reflect"
 
-	workflowserviceclient "go.uber.org/cadence/.gen/go/cadence/workflowserviceclient"
-	gomock "go.uber.org/mock/gomock"
-	yarpc "go.uber.org/yarpc"
-
+	tally "github.com/uber-go/tally"
 	client "github.com/uber/cadence/client"
 	admin "github.com/uber/cadence/client/admin"
 	frontend "github.com/uber/cadence/client/frontend"
@@ -41,6 +38,9 @@ import (
 	rpc "github.com/uber/cadence/common/quotas/global/rpc"
 	service "github.com/uber/cadence/common/service"
 	executorclient "github.com/uber/cadence/service/sharddistributor/client/executorclient"
+	workflowserviceclient "go.uber.org/cadence/.gen/go/cadence/workflowserviceclient"
+	gomock "go.uber.org/mock/gomock"
+	yarpc "go.uber.org/yarpc"
 )
 
 // MockResourceFactory is a mock of ResourceFactory interface.
@@ -511,6 +511,20 @@ func (m *MockResource) GetMetricsClient() metrics.Client {
 func (mr *MockResourceMockRecorder) GetMetricsClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMetricsClient", reflect.TypeOf((*MockResource)(nil).GetMetricsClient))
+}
+
+// GetMetricsScope mocks base method.
+func (m *MockResource) GetMetricsScope() tally.Scope {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMetricsScope")
+	ret0, _ := ret[0].(tally.Scope)
+	return ret0
+}
+
+// GetMetricsScope indicates an expected call of GetMetricsScope.
+func (mr *MockResourceMockRecorder) GetMetricsScope() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMetricsScope", reflect.TypeOf((*MockResource)(nil).GetMetricsScope))
 }
 
 // GetPayloadSerializer mocks base method.
