@@ -202,7 +202,6 @@ func (e *matchingEngineImpl) setupExecutor(shardDistributorExecutorClient execut
 		CreateTime:      e.timeSource.Now(),
 		HistoryService:  e.historyService}
 	e.taskListsFactory = taskListFactory
-	// Use the metrics scope from the resource for the executor client
 	scope := e.metricsScope
 	// Move the configuration to e.config
 	config := clientcommon.Config{
