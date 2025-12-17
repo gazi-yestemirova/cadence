@@ -59,9 +59,15 @@ import (
 	"github.com/uber/cadence/service/sharddistributor/client/executorclient"
 )
 
-// If sticky poller is not seem in last 10s, we treat it as sticky worker unavailable
-// This seems aggressive, but the default sticky schedule_to_start timeout is 5s, so 10s seems reasonable.
-const _stickyPollerUnavailableWindow = 10 * time.Second
+const (
+	// If sticky poller is not seem in last 10s, we treat it as sticky worker unavailable
+	// This seems aggressive, but the default sticky schedule_to_start timeout is 5s, so 10s seems reasonable.
+	_stickyPollerUnavailableWindow = 10 * time.Second
+
+	// _defaultSDReportTTL is the default TTL for shard status reports from matching executor to shard distributor.
+	// This controls how frequently the executor reports its shard load/status to the distributor.
+	_defaultSDReportTTL = 1 * time.Minute
+)
 
 // Implements matching.Engine
 // TODO: Switch implementation from lock/channel based to a partitioned agent
@@ -189,16 +195,7 @@ func (e *matchingEngineImpl) Stop() {
 }
 
 func (e *matchingEngineImpl) setupExecutor(shardDistributorExecutorClient executorclient.Client) {
-	cfg := e.ShardDistributorMatchingConfig
-
-	// Get TTLReport from config, default to 1 minute if not configured
-	var reportTTL time.Duration
-	if len(cfg.Namespaces) > 0 {
-		reportTTL = cfg.Namespaces[0].TTLReport
-	}
-	if reportTTL == 0 {
-		reportTTL = 1 * time.Minute
-	}
+	cfg, reportTTL := e.getValidatedShardDistributorConfig()
 
 	taskListFactory := &tasklist.ShardProcessorFactory{
 		TaskListsLock: &e.taskListsLock,
@@ -221,6 +218,21 @@ func (e *matchingEngineImpl) setupExecutor(shardDistributorExecutorClient execut
 		panic(err)
 	}
 	e.executor = executor
+}
+
+func (e *matchingEngineImpl) getValidatedShardDistributorConfig() (clientcommon.Config, time.Duration) {
+	cfg := e.ShardDistributorMatchingConfig
+
+	if len(cfg.Namespaces) > 1 {
+		e.logger.Fatal("matching service does not support multiple namespaces", tag.Value(cfg.Namespaces))
+	}
+
+	// Get TTLReport from config, default if not configured
+	reportTTL := _defaultSDReportTTL
+	if len(cfg.Namespaces) == 1 && cfg.Namespaces[0].TTLReport != 0 {
+		reportTTL = cfg.Namespaces[0].TTLReport
+	}
+	return cfg, reportTTL
 }
 
 func (e *matchingEngineImpl) getTaskLists(maxCount int) []tasklist.Manager {
