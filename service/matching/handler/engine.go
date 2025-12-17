@@ -101,11 +101,11 @@ type (
 		domainCache                 cache.DomainCache
 		versionChecker              client.VersionChecker
 		membershipResolver          membership.Resolver
-	isolationState               isolationgroup.State
-	timeSource                   clock.TimeSource
-	failoverNotificationVersion  int64
-	shardDistributorMatchingCfg  clientcommon.Config
-}
+		isolationState              isolationgroup.State
+		timeSource                  clock.TimeSource
+		failoverNotificationVersion int64
+		shardDistributorMatchingCfg clientcommon.Config
+	}
 
 	// HistoryInfo consists of two integer regarding the history size and history count
 	// HistoryInfo struct {
