@@ -23,9 +23,8 @@
 package config
 
 import (
-	"time"
-
 	"gopkg.in/yaml.v2"
+	"time"
 
 	"github.com/uber/cadence/common/dynamicconfig"
 	"github.com/uber/cadence/common/dynamicconfig/dynamicproperties"
@@ -35,15 +34,8 @@ import (
 type (
 	// Config represents configuration for shard manager service
 	Config struct {
-		PersistenceMaxQPS       dynamicproperties.IntPropertyFn
-		PersistenceGlobalMaxQPS dynamicproperties.IntPropertyFn
-		ThrottledLogRPS         dynamicproperties.IntPropertyFn
-		// hostname info
-		HostName string
-	}
-
-	MigrationConfig struct {
-		MigrationMode dynamicproperties.StringPropertyFnWithNamespaceFilters
+		LoadBalancingMode dynamicproperties.StringPropertyFnWithNamespaceFilters
+		MigrationMode     dynamicproperties.StringPropertyFnWithNamespaceFilters
 	}
 
 	StaticConfig struct {
@@ -114,8 +106,8 @@ const (
 	MigrationModeONBOARDED              = "onboarded"
 )
 
-// ConfigMode maps string migration mode values to types.MigrationMode
-var ConfigMode = map[string]types.MigrationMode{
+// MigrationMode maps string migration mode values to types.MigrationMode
+var MigrationMode = map[string]types.MigrationMode{
 	MigrationModeINVALID:                types.MigrationModeINVALID,
 	MigrationModeLOCALPASSTHROUGH:       types.MigrationModeLOCALPASSTHROUGH,
 	MigrationModeLOCALPASSTHROUGHSHADOW: types.MigrationModeLOCALPASSTHROUGHSHADOW,
@@ -123,39 +115,56 @@ var ConfigMode = map[string]types.MigrationMode{
 	MigrationModeONBOARDED:              types.MigrationModeONBOARDED,
 }
 
+// NewConfig returns a new instance of Config
+func NewConfig(dc *dynamicconfig.Collection) *Config {
+	return &Config{
+		LoadBalancingMode: dc.GetStringPropertyFilteredByNamespace(dynamicproperties.ShardDistributorLoadBalancingMode),
+		MigrationMode:     dc.GetStringPropertyFilteredByNamespace(dynamicproperties.ShardDistributorMigrationMode),
+	}
+}
+
+// GetMigrationMode gets the migration mode for a given namespace
+// If the mode is not set, it defaults to MigrationModeINVALID
+func (c *Config) GetMigrationMode(namespace string) types.MigrationMode {
+	mode, ok := MigrationMode[c.MigrationMode(namespace)]
+	if !ok {
+		return MigrationMode[MigrationModeINVALID]
+	}
+	return mode
+}
+
+const (
+	LoadBalancingModeINVALID = "invalid"
+	LoadBalancingModeNAIVE   = "naive"
+	LoadBalancingModeGREEDY  = "greedy"
+)
+
+// LoadBalancingMode maps string migration mode values to types.LoadBalancingMode
+var LoadBalancingMode = map[string]types.LoadBalancingMode{
+	LoadBalancingModeINVALID: types.LoadBalancingModeINVALID,
+	LoadBalancingModeNAIVE:   types.LoadBalancingModeNAIVE,
+	LoadBalancingModeGREEDY:  types.LoadBalancingModeGREEDY,
+}
+
+// GetLoadBalancingMode gets the load balancing mode for a given namespace
+// If the mode is invalid, it returns types.LoadBalancingModeINVALID
+func (c *Config) GetLoadBalancingMode(namespace string) types.LoadBalancingMode {
+	mode, ok := LoadBalancingMode[c.LoadBalancingMode(namespace)]
+	if !ok {
+		return types.LoadBalancingModeINVALID
+	}
+
+	return mode
+}
+
 func (s *ShardDistribution) GetMigrationMode(namespace string) types.MigrationMode {
 	for _, ns := range s.Namespaces {
 		if ns.Name == namespace {
-			return ConfigMode[ns.Mode]
+			return MigrationMode[ns.Mode]
 		}
 	}
 	// TODO in the dynamic configuration I will setup a default value
-	return ConfigMode[MigrationModeONBOARDED]
-}
-
-// NewConfig returns new service config with default values
-func NewConfig(dc *dynamicconfig.Collection, hostName string) *Config {
-	return &Config{
-		PersistenceMaxQPS:       dc.GetIntProperty(dynamicproperties.ShardManagerPersistenceMaxQPS),
-		PersistenceGlobalMaxQPS: dc.GetIntProperty(dynamicproperties.ShardManagerPersistenceGlobalMaxQPS),
-		ThrottledLogRPS:         dc.GetIntProperty(dynamicproperties.ShardManagerThrottledLogRPS),
-		HostName:                hostName,
-	}
-}
-
-// NewMigrationConfig returns new dynamic config with onboarding info
-func NewMigrationConfig(dc *dynamicconfig.Collection) *MigrationConfig {
-	return &MigrationConfig{
-		MigrationMode: dc.GetStringPropertyFilteredByNamespace(dynamicproperties.MigrationMode),
-	}
-}
-
-func (c *MigrationConfig) GetMigrationMode(namespace string) types.MigrationMode {
-	mode, ok := ConfigMode[c.MigrationMode(namespace)]
-	if !ok {
-		return ConfigMode[MigrationModeONBOARDED]
-	}
-	return mode
+	return MigrationMode[MigrationModeONBOARDED]
 }
 
 var _ yaml.Unmarshaler = (*YamlNode)(nil)
