@@ -57,7 +57,6 @@ import (
 	"github.com/uber/cadence/service/matching/tasklist"
 	"github.com/uber/cadence/service/sharddistributor/client/clientcommon"
 	"github.com/uber/cadence/service/sharddistributor/client/executorclient"
-	sdconfig "github.com/uber/cadence/service/sharddistributor/config"
 )
 
 // If sticky poller is not seem in last 10s, we treat it as sticky worker unavailable
@@ -102,10 +101,11 @@ type (
 		domainCache                 cache.DomainCache
 		versionChecker              client.VersionChecker
 		membershipResolver          membership.Resolver
-		isolationState              isolationgroup.State
-		timeSource                  clock.TimeSource
-		failoverNotificationVersion int64
-	}
+	isolationState               isolationgroup.State
+	timeSource                   clock.TimeSource
+	failoverNotificationVersion  int64
+	shardDistributorMatchingCfg  clientcommon.Config
+}
 
 	// HistoryInfo consists of two integer regarding the history size and history count
 	// HistoryInfo struct {
@@ -143,26 +143,28 @@ func NewEngine(
 	isolationState isolationgroup.State,
 	timeSource clock.TimeSource,
 	shardDistributorClient executorclient.Client,
+	shardDistributorMatchingCfg clientcommon.Config,
 ) Engine {
 	e := &matchingEngineImpl{
-		shutdown:             make(chan struct{}),
-		shutdownCompletion:   &sync.WaitGroup{},
-		taskManager:          taskManager,
-		clusterMetadata:      clusterMetadata,
-		historyService:       historyService,
-		tokenSerializer:      common.NewJSONTaskTokenSerializer(),
-		taskLists:            make(map[tasklist.Identifier]tasklist.Manager),
-		logger:               logger.WithTags(tag.ComponentMatchingEngine),
-		metricsClient:        metricsClient,
-		metricsScope:         metricsScope,
-		matchingClient:       matchingClient,
-		config:               config,
-		lockableQueryTaskMap: lockableQueryTaskMap{queryTaskMap: make(map[string]chan *queryResult)},
-		domainCache:          domainCache,
-		versionChecker:       client.NewVersionChecker(),
-		membershipResolver:   resolver,
-		isolationState:       isolationState,
-		timeSource:           timeSource,
+		shutdown:                    make(chan struct{}),
+		shutdownCompletion:          &sync.WaitGroup{},
+		taskManager:                 taskManager,
+		clusterMetadata:             clusterMetadata,
+		historyService:              historyService,
+		tokenSerializer:             common.NewJSONTaskTokenSerializer(),
+		taskLists:                   make(map[tasklist.Identifier]tasklist.Manager),
+		logger:                      logger.WithTags(tag.ComponentMatchingEngine),
+		metricsClient:               metricsClient,
+		metricsScope:                metricsScope,
+		matchingClient:              matchingClient,
+		config:                      config,
+		lockableQueryTaskMap:        lockableQueryTaskMap{queryTaskMap: make(map[string]chan *queryResult)},
+		domainCache:                 domainCache,
+		versionChecker:              client.NewVersionChecker(),
+		membershipResolver:          resolver,
+		isolationState:              isolationState,
+		timeSource:                  timeSource,
+		shardDistributorMatchingCfg: shardDistributorMatchingCfg,
 	}
 
 	e.setupExecutor(shardDistributorClient)
@@ -187,30 +189,31 @@ func (e *matchingEngineImpl) Stop() {
 }
 
 func (e *matchingEngineImpl) setupExecutor(shardDistributorExecutorClient executorclient.Client) {
-	config := clientcommon.Config{
-		Namespaces: []clientcommon.NamespaceConfig{
-			// TTL for shard is aligned with the default value of the liveness time for a tasklist
-			{Namespace: "cadence-matching",
-				HeartBeatInterval: 1 * time.Second,
-				MigrationMode:     sdconfig.MigrationModeLOCALPASSTHROUGH,
-				TTLShard:          5 * time.Minute,
-				TTLReport:         1 * time.Minute}}}
+	cfg := e.shardDistributorMatchingCfg
+
+	// Get TTLReport from config, default to 1 minute if not configured
+	var reportTTL time.Duration
+	if len(cfg.Namespaces) > 0 {
+		reportTTL = cfg.Namespaces[0].TTLReport
+	}
+	if reportTTL == 0 {
+		reportTTL = 1 * time.Minute
+	}
 
 	taskListFactory := &tasklist.ShardProcessorFactory{
 		TaskListsLock: &e.taskListsLock,
 		TaskLists:     e.taskLists,
-		ReportTTL:     config.Namespaces[0].TTLReport,
-		TimeSource:    e.timeSource}
+		ReportTTL:     reportTTL,
+		TimeSource:    e.timeSource,
+	}
 	e.taskListsFactory = taskListFactory
-	scope := e.metricsScope
-	// Move the configuration to e.config
 
 	params := executorclient.Params[tasklist.ShardProcessor]{
 		ExecutorClient:        shardDistributorExecutorClient,
-		MetricsScope:          scope,
+		MetricsScope:          e.metricsScope,
 		Logger:                e.logger,
 		ShardProcessorFactory: taskListFactory,
-		Config:                config,
+		Config:                cfg,
 		TimeSource:            e.timeSource,
 	}
 	executor, err := executorclient.NewExecutor[tasklist.ShardProcessor](params)
@@ -218,7 +221,6 @@ func (e *matchingEngineImpl) setupExecutor(shardDistributorExecutorClient execut
 		panic(err)
 	}
 	e.executor = executor
-
 }
 
 func (e *matchingEngineImpl) getTaskLists(maxCount int) []tasklist.Manager {
