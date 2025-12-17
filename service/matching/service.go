@@ -33,18 +33,16 @@ import (
 	"github.com/uber/cadence/service/matching/handler"
 	"github.com/uber/cadence/service/matching/wrappers/grpc"
 	"github.com/uber/cadence/service/matching/wrappers/thrift"
-	"github.com/uber/cadence/service/sharddistributor/client/clientcommon"
 )
 
 // Service represents the cadence-matching service
 type Service struct {
 	resource.Resource
 
-	status                   int32
-	handler                  handler.Handler
-	stopC                    chan struct{}
-	config                   *config.Config
-	shardDistributorMatching clientcommon.Config
+	status  int32
+	handler handler.Handler
+	stopC   chan struct{}
+	config  *config.Config
 }
 
 // NewService builds a new cadence-matching service
@@ -78,11 +76,10 @@ func NewService(
 	}
 
 	return &Service{
-		Resource:                 serviceResource,
-		status:                   common.DaemonStatusInitialized,
-		config:                   serviceConfig,
-		stopC:                    make(chan struct{}),
-		shardDistributorMatching: params.ShardDistributorMatching,
+		Resource: serviceResource,
+		status:   common.DaemonStatusInitialized,
+		config:   serviceConfig,
+		stopC:    make(chan struct{}),
 	}, nil
 }
 
@@ -109,7 +106,6 @@ func (s *Service) Start() {
 		s.GetIsolationGroupState(),
 		s.GetTimeSource(),
 		s.GetShardDistributorExecutorClient(),
-		s.shardDistributorMatching,
 	)
 
 	s.handler = handler.NewHandler(engine, s.config, s.GetDomainCache(), s.GetMetricsClient(), s.GetLogger(), s.GetThrottledLogger())

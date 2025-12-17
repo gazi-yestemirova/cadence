@@ -46,7 +46,6 @@ import (
 	"github.com/uber/cadence/common/pinot"
 	"github.com/uber/cadence/common/rpc"
 	"github.com/uber/cadence/common/service"
-	"github.com/uber/cadence/service/sharddistributor/client/clientcommon"
 	"github.com/uber/cadence/service/worker/diagnostics/invariant"
 )
 
@@ -95,8 +94,5 @@ type (
 		// NewPersistenceBeanFn can be used to override the default persistence bean creation in unit tests to avoid DB setup
 		NewPersistenceBeanFn  func(persistenceClient.Factory, *persistenceClient.Params, *service.Config) (persistenceClient.Bean, error)
 		DiagnosticsInvariants []invariant.Invariant
-
-		// ShardDistributorMatching is the config for shard distributor executor client in matching service
-		ShardDistributorMatching clientcommon.Config
 	}
 )

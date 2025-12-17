@@ -38,7 +38,6 @@ import (
 	"github.com/uber/cadence/common/metrics"
 	ringpopprovider "github.com/uber/cadence/common/peerprovider/ringpopprovider/config"
 	"github.com/uber/cadence/common/service"
-	"github.com/uber/cadence/service/sharddistributor/client/clientcommon"
 	sdconfig "github.com/uber/cadence/service/sharddistributor/config"
 )
 
@@ -95,9 +94,6 @@ type (
 
 		// ShardDistribution is a config for the shard distributor leader election component that allows to run a single process per region and manage shard namespaces.
 		ShardDistribution sdconfig.ShardDistribution `yaml:"shardDistribution"`
-
-		// ShardDistributorMatching is the config for shard distributor executor client in matching service
-		ShardDistributorMatching clientcommon.Config `yaml:"shard-distributor-matching"`
 
 		// Histograms controls timer vs histogram metric emission while they are being migrated.
 		//
