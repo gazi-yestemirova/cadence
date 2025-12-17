@@ -40,11 +40,11 @@ import (
 type Service struct {
 	resource.Resource
 
-	status                   int32
-	handler                  handler.Handler
-	stopC                    chan struct{}
-	config                   *config.Config
-	shardDistributorMatching clientcommon.Config
+	status                         int32
+	handler                        handler.Handler
+	stopC                          chan struct{}
+	config                         *config.Config
+	ShardDistributorMatchingConfig clientcommon.Config
 }
 
 // NewService builds a new cadence-matching service
@@ -78,11 +78,11 @@ func NewService(
 	}
 
 	return &Service{
-		Resource:                 serviceResource,
-		status:                   common.DaemonStatusInitialized,
-		config:                   serviceConfig,
-		stopC:                    make(chan struct{}),
-		shardDistributorMatching: params.ShardDistributorMatching,
+		Resource:                       serviceResource,
+		status:                         common.DaemonStatusInitialized,
+		config:                         serviceConfig,
+		stopC:                          make(chan struct{}),
+		ShardDistributorMatchingConfig: params.ShardDistributorMatchingConfig,
 	}, nil
 }
 
@@ -109,7 +109,7 @@ func (s *Service) Start() {
 		s.GetIsolationGroupState(),
 		s.GetTimeSource(),
 		s.GetShardDistributorExecutorClient(),
-		s.shardDistributorMatching,
+		s.ShardDistributorMatchingConfig,
 	)
 
 	s.handler = handler.NewHandler(engine, s.config, s.GetDomainCache(), s.GetMetricsClient(), s.GetLogger(), s.GetThrottledLogger())

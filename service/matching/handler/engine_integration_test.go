@@ -69,14 +69,14 @@ import (
 type (
 	matchingEngineSuite struct {
 		suite.Suite
-		controller                  *gomock.Controller
-		mockHistoryClient           *history.MockClient
-		mockMatchingClient          *matching.MockClient
-		mockDomainCache             *cache.MockDomainCache
-		mockMembershipResolver      *membership.MockResolver
-		mockIsolationStore          *dynamicconfig.MockClient
-		mockShardExecutorClient     *executorclient.MockClient
-		shardDistributorMatchingCfg clientcommon.Config
+		controller                     *gomock.Controller
+		mockHistoryClient              *history.MockClient
+		mockMatchingClient             *matching.MockClient
+		mockDomainCache                *cache.MockDomainCache
+		mockMembershipResolver         *membership.MockResolver
+		mockIsolationStore             *dynamicconfig.MockClient
+		mockShardExecutorClient        *executorclient.MockClient
+		ShardDistributorMatchingConfig clientcommon.Config
 
 		matchingEngine       *matchingEngineImpl
 		taskManager          *tasklist.TestTaskManager

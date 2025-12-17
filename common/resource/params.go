@@ -96,7 +96,7 @@ type (
 		NewPersistenceBeanFn  func(persistenceClient.Factory, *persistenceClient.Params, *service.Config) (persistenceClient.Bean, error)
 		DiagnosticsInvariants []invariant.Invariant
 
-		// ShardDistributorMatching is the config for shard distributor executor client in matching service
-		ShardDistributorMatching clientcommon.Config
+		// ShardDistributorMatchingConfig is the config for shard distributor executor client in matching service
+		ShardDistributorMatchingConfig clientcommon.Config
 	}
 )

@@ -82,29 +82,29 @@ type (
 	}
 
 	matchingEngineImpl struct {
-		shutdownCompletion          *sync.WaitGroup
-		shutdown                    chan struct{}
-		taskManager                 persistence.TaskManager
-		clusterMetadata             cluster.Metadata
-		historyService              history.Client
-		matchingClient              matching.Client
-		tokenSerializer             common.TaskTokenSerializer
-		logger                      log.Logger
-		metricsClient               metrics.Client
-		metricsScope                tally.Scope
-		taskListsLock               sync.RWMutex                             // locks mutation of taskLists
-		taskLists                   map[tasklist.Identifier]tasklist.Manager // Convert to LRU cache
-		executor                    executorclient.Executor[tasklist.ShardProcessor]
-		taskListsFactory            *tasklist.ShardProcessorFactory
-		config                      *config.Config
-		lockableQueryTaskMap        lockableQueryTaskMap
-		domainCache                 cache.DomainCache
-		versionChecker              client.VersionChecker
-		membershipResolver          membership.Resolver
-		isolationState              isolationgroup.State
-		timeSource                  clock.TimeSource
-		failoverNotificationVersion int64
-		shardDistributorMatchingCfg clientcommon.Config
+		shutdownCompletion             *sync.WaitGroup
+		shutdown                       chan struct{}
+		taskManager                    persistence.TaskManager
+		clusterMetadata                cluster.Metadata
+		historyService                 history.Client
+		matchingClient                 matching.Client
+		tokenSerializer                common.TaskTokenSerializer
+		logger                         log.Logger
+		metricsClient                  metrics.Client
+		metricsScope                   tally.Scope
+		taskListsLock                  sync.RWMutex                             // locks mutation of taskLists
+		taskLists                      map[tasklist.Identifier]tasklist.Manager // Convert to LRU cache
+		executor                       executorclient.Executor[tasklist.ShardProcessor]
+		taskListsFactory               *tasklist.ShardProcessorFactory
+		config                         *config.Config
+		lockableQueryTaskMap           lockableQueryTaskMap
+		domainCache                    cache.DomainCache
+		versionChecker                 client.VersionChecker
+		membershipResolver             membership.Resolver
+		isolationState                 isolationgroup.State
+		timeSource                     clock.TimeSource
+		failoverNotificationVersion    int64
+		ShardDistributorMatchingConfig clientcommon.Config
 	}
 
 	// HistoryInfo consists of two integer regarding the history size and history count
@@ -143,28 +143,28 @@ func NewEngine(
 	isolationState isolationgroup.State,
 	timeSource clock.TimeSource,
 	shardDistributorClient executorclient.Client,
-	shardDistributorMatchingCfg clientcommon.Config,
+	ShardDistributorMatchingConfig clientcommon.Config,
 ) Engine {
 	e := &matchingEngineImpl{
-		shutdown:                    make(chan struct{}),
-		shutdownCompletion:          &sync.WaitGroup{},
-		taskManager:                 taskManager,
-		clusterMetadata:             clusterMetadata,
-		historyService:              historyService,
-		tokenSerializer:             common.NewJSONTaskTokenSerializer(),
-		taskLists:                   make(map[tasklist.Identifier]tasklist.Manager),
-		logger:                      logger.WithTags(tag.ComponentMatchingEngine),
-		metricsClient:               metricsClient,
-		metricsScope:                metricsScope,
-		matchingClient:              matchingClient,
-		config:                      config,
-		lockableQueryTaskMap:        lockableQueryTaskMap{queryTaskMap: make(map[string]chan *queryResult)},
-		domainCache:                 domainCache,
-		versionChecker:              client.NewVersionChecker(),
-		membershipResolver:          resolver,
-		isolationState:              isolationState,
-		timeSource:                  timeSource,
-		shardDistributorMatchingCfg: shardDistributorMatchingCfg,
+		shutdown:                       make(chan struct{}),
+		shutdownCompletion:             &sync.WaitGroup{},
+		taskManager:                    taskManager,
+		clusterMetadata:                clusterMetadata,
+		historyService:                 historyService,
+		tokenSerializer:                common.NewJSONTaskTokenSerializer(),
+		taskLists:                      make(map[tasklist.Identifier]tasklist.Manager),
+		logger:                         logger.WithTags(tag.ComponentMatchingEngine),
+		metricsClient:                  metricsClient,
+		metricsScope:                   metricsScope,
+		matchingClient:                 matchingClient,
+		config:                         config,
+		lockableQueryTaskMap:           lockableQueryTaskMap{queryTaskMap: make(map[string]chan *queryResult)},
+		domainCache:                    domainCache,
+		versionChecker:                 client.NewVersionChecker(),
+		membershipResolver:             resolver,
+		isolationState:                 isolationState,
+		timeSource:                     timeSource,
+		ShardDistributorMatchingConfig: ShardDistributorMatchingConfig,
 	}
 
 	e.setupExecutor(shardDistributorClient)
@@ -189,7 +189,7 @@ func (e *matchingEngineImpl) Stop() {
 }
 
 func (e *matchingEngineImpl) setupExecutor(shardDistributorExecutorClient executorclient.Client) {
-	cfg := e.shardDistributorMatchingCfg
+	cfg := e.ShardDistributorMatchingConfig
 
 	// Get TTLReport from config, default to 1 minute if not configured
 	var reportTTL time.Duration
