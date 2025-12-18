@@ -7,3 +7,6 @@ history.enableTransferQueueV2:
 frontend.warmupDuration:
 - value: "1s"
   constraints: {}
+shardDistributor.migrationMode:
+- value: "local_pass"
+  constraints: {}

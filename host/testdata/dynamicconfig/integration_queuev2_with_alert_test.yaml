@@ -1,6 +1,9 @@
 frontend.warmupDuration:
 - value: "1s"
   constraints: {}
+shardDistributor.migrationMode:
+- value: "local_pass"
+  constraints: {}
 history.enableTimerQueueV2:
 - value: true
   constraints: {}
