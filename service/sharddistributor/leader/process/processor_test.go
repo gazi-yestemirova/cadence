@@ -22,40 +22,48 @@ import (
 )
 
 type testDependencies struct {
-	ctrl       *gomock.Controller
-	store      *store.MockStore
-	election   *store.MockElection
-	timeSource clock.MockedTimeSource
-	factory    Factory
-	cfg        config.Namespace
+	ctrl          *gomock.Controller
+	store         *store.MockStore
+	election      *store.MockElection
+	timeSource    clock.MockedTimeSource
+	factory       Factory
+	cfg           config.Namespace
+	sdConfig      *config.Config
+	migrationMode string
 }
 
 func setupProcessorTest(t *testing.T, namespaceType string) *testDependencies {
 	ctrl := gomock.NewController(t)
 	mockedClock := clock.NewMockedTimeSource()
-	return &testDependencies{
-		ctrl:       ctrl,
-		store:      store.NewMockStore(ctrl),
-		election:   store.NewMockElection(ctrl),
-		timeSource: mockedClock,
-		factory: NewProcessorFactory(
-			testlogger.New(t),
-			metrics.NewNoopMetricsClient(),
-			mockedClock,
-			config.ShardDistribution{
-				Process: config.LeaderProcess{
-					Period:       time.Second,
-					HeartbeatTTL: time.Second,
-				},
-			},
-			&config.Config{
-				LoadBalancingMode: func(namespace string) string {
-					return config.LoadBalancingModeNAIVE
-				},
-			},
-		),
-		cfg: config.Namespace{Name: "test-ns", ShardNum: 2, Type: namespaceType, Mode: config.MigrationModeONBOARDED},
+	deps := &testDependencies{
+		ctrl:          ctrl,
+		store:         store.NewMockStore(ctrl),
+		election:      store.NewMockElection(ctrl),
+		timeSource:    mockedClock,
+		cfg:           config.Namespace{Name: "test-ns", ShardNum: 2, Type: namespaceType, Mode: config.MigrationModeONBOARDED},
+		migrationMode: config.MigrationModeONBOARDED,
 	}
+	deps.sdConfig = &config.Config{
+		LoadBalancingMode: func(namespace string) string {
+			return config.LoadBalancingModeNAIVE
+		},
+		MigrationMode: func(namespace string) string {
+			return deps.migrationMode
+		},
+	}
+	deps.factory = NewProcessorFactory(
+		testlogger.New(t),
+		metrics.NewNoopMetricsClient(),
+		mockedClock,
+		config.ShardDistribution{
+			Process: config.LeaderProcess{
+				Period:       time.Second,
+				HeartbeatTTL: time.Second,
+			},
+		},
+		deps.sdConfig,
+	)
+	return deps
 }
 
 func TestRunAndTerminate(t *testing.T) {
@@ -381,7 +389,7 @@ func TestRunLoop_ContextCancellation(t *testing.T) {
 
 func TestRunLoop_MigrationNotOnboarded(t *testing.T) {
 	mocks := setupProcessorTest(t, config.NamespaceTypeFixed)
-	mocks.cfg.Mode = config.MigrationModeDISTRIBUTEDPASSTHROUGH
+	mocks.migrationMode = config.MigrationModeDISTRIBUTEDPASSTHROUGH
 	defer mocks.ctrl.Finish()
 	processor := mocks.factory.CreateProcessor(mocks.cfg, mocks.store, mocks.election).(*namespaceProcessor)
 	ctx, cancel := context.WithCancel(context.Background())
