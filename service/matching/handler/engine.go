@@ -225,15 +225,20 @@ func (e *matchingEngineImpl) setupExecutor(shardDistributorExecutorClient execut
 func (e *matchingEngineImpl) getValidatedShardDistributorConfig() (clientcommon.Config, time.Duration) {
 	cfg := e.ShardDistributorMatchingConfig
 
-	if len(cfg.Namespaces) > 1 {
-		e.logger.Fatal("matching service does not support multiple namespaces", tag.Value(cfg.Namespaces))
+	if len(cfg.Namespaces) != 1 {
+		e.logger.Fatal("matching service requires exactly one namespace", tag.Value(cfg.Namespaces))
 	}
 
 	// Get TTLReport from config, default if not configured
 	reportTTL := _defaultSDReportTTL
-	if len(cfg.Namespaces) == 1 && cfg.Namespaces[0].TTLReport != 0 {
+	if cfg.Namespaces[0].TTLReport != 0 {
 		reportTTL = cfg.Namespaces[0].TTLReport
 	}
+
+	// Override migration mode from dynamic config
+	namespace := cfg.Namespaces[0].Namespace
+	cfg.Namespaces[0].MigrationMode = e.config.ShardDistributorMigrationMode(namespace)
+
 	return cfg, reportTTL
 }
 

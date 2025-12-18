@@ -105,6 +105,8 @@ type (
 		MaxTimeBetweenTaskDeletes time.Duration
 
 		EnableTasklistOwnershipGuard dynamicproperties.BoolPropertyFn
+
+		ShardDistributorMigrationMode dynamicproperties.StringPropertyFnWithNamespaceFilters
 	}
 
 	ForwarderConfig struct {
@@ -232,5 +234,6 @@ func NewConfig(dc *dynamicconfig.Collection, hostName string, getIsolationGroups
 		EnableStandbyTaskCompletion:               dc.GetBoolPropertyFilteredByTaskListInfo(dynamicproperties.MatchingEnableStandbyTaskCompletion),
 		EnableClientAutoConfig:                    dc.GetBoolPropertyFilteredByTaskListInfo(dynamicproperties.MatchingEnableClientAutoConfig),
 		EnableReturnAllTaskListKinds:              dc.GetBoolProperty(dynamicproperties.MatchingEnableReturnAllTaskListKinds),
+		ShardDistributorMigrationMode:             dc.GetStringPropertyFilteredByNamespace(dynamicproperties.ShardDistributorMigrationMode),
 	}
 }
