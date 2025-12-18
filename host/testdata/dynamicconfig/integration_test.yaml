@@ -4,3 +4,6 @@ frontend.warmupDuration:
 frontend.enableActiveClusterSelectionPolicyInStartWorkflow:
 - value: true
   constraints: {}
+shardDistributor.migrationMode:
+- value: "local_pass"
+  constraints: {}

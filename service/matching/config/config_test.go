@@ -102,6 +102,7 @@ func TestNewConfig(t *testing.T) {
 		"IsolationGroupNoPollersSustainedDuration":  {dynamicproperties.MatchingIsolationGroupNoPollersSustainedDuration, time.Duration(40)},
 		"IsolationGroupsPerPartition":               {dynamicproperties.MatchingIsolationGroupsPerPartition, 41},
 		"EnableReturnAllTaskListKinds":              {dynamicproperties.MatchingEnableReturnAllTaskListKinds, true},
+		"ShardDistributorMigrationMode":             {dynamicproperties.ShardDistributorMigrationMode, "local_pass"},
 	}
 	client := dynamicconfig.NewInMemoryClient()
 	for fieldName, expected := range fields {
@@ -174,6 +175,8 @@ func getValue(f *reflect.Value) interface{} {
 			return fn("domain", "tasklist", int(types.TaskListTypeDecision))
 		case func() []string:
 			return fn()
+		case dynamicproperties.StringPropertyFnWithNamespaceFilters:
+			return fn("namespace")
 		default:
 			panic("Unable to handle type: " + f.Type().Name())
 		}

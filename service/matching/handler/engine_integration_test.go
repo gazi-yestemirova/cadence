@@ -1413,6 +1413,7 @@ func defaultTestConfig() *config.Config {
 	config.AsyncTaskDispatchTimeout = dynamicproperties.GetDurationPropertyFnFilteredByTaskListInfo(10 * time.Millisecond)
 	config.MaxTimeBetweenTaskDeletes = time.Duration(0)
 	config.EnableTasklistOwnershipGuard = func(opts ...dynamicproperties.FilterOption) bool { return true }
+	config.ShardDistributorMigrationMode = func(namespace string) string { return sdconfig.MigrationModeLOCALPASSTHROUGH }
 	return config
 }
 
