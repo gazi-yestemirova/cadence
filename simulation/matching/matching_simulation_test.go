@@ -133,6 +133,7 @@ func TestMatchingSimulation(t *testing.T) {
 		dynamicproperties.MatchingAdaptiveScalerUpdateInterval:         clusterConfig.MatchingConfig.SimulationConfig.AdaptiveScalerUpdateInterval,
 		dynamicproperties.MatchingQPSTrackerInterval:                   getQPSTrackerInterval(clusterConfig.MatchingConfig.SimulationConfig.QPSTrackerInterval),
 		dynamicproperties.TaskIsolationDuration:                        clusterConfig.MatchingConfig.SimulationConfig.TaskIsolationDuration,
+		dynamicproperties.ShardDistributorMigrationMode:                "local_pass",
 	}
 
 	ctrl := gomock.NewController(t)
