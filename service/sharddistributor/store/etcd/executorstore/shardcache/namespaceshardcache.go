@@ -24,6 +24,10 @@ const (
 	// RetryInterval for watch failures is between 50ms to 150ms
 	namespaceRefreshLoopWatchJitterCoeff   = 0.5
 	namespaceRefreshLoopWatchRetryInterval = 100 * time.Millisecond
+
+	// refreshDebounceInterval is the delay before refreshing after a watch event.
+	// Multiple events within this window are coalesced into a single refresh.
+	refreshDebounceInterval = 50 * time.Millisecond
 )
 
 type namespaceShardToExecutor struct {
@@ -145,13 +149,32 @@ func (n *namespaceShardToExecutor) watch() error {
 		// WithRequireLeader ensures that the etcd cluster has a leader
 		clientv3.WithRequireLeader(ctx),
 		etcdkeys.BuildExecutorsPrefix(n.etcdPrefix, n.namespace),
-		clientv3.WithPrefix(), clientv3.WithPrevKV(),
+		clientv3.WithPrefix(),
 	)
+
+	// Debounce timer to coalesce multiple rapid events into a single refresh.
+	// Starts in a stopped state; we'll reset it when we see a relevant event.
+	debounceTimer := n.timeSource.NewTimer(0)
+	if !debounceTimer.Stop() {
+		select {
+		case <-debounceTimer.Chan():
+		default:
+		}
+	}
+	defer debounceTimer.Stop()
+	refreshPending := false
 
 	for {
 		select {
 		case <-n.stopCh:
 			return nil
+
+		case <-debounceTimer.Chan():
+			// Debounce period elapsed, perform the refresh
+			refreshPending = false
+			if err := n.refresh(context.Background()); err != nil {
+				n.logger.Error("failed to refresh namespace shard to executor", tag.Error(err))
+			}
 
 		case watchResp, ok := <-watchChan:
 			if err := watchResp.Err(); err != nil {
@@ -161,23 +184,15 @@ func (n *namespaceShardToExecutor) watch() error {
 				return fmt.Errorf("watch channel closed")
 			}
 
-			shouldRefresh := false
 			for _, event := range watchResp.Events {
 				_, keyType, keyErr := etcdkeys.ParseExecutorKey(n.etcdPrefix, n.namespace, string(event.Kv.Key))
 				if keyErr == nil && (keyType == etcdkeys.ExecutorAssignedStateKey || keyType == etcdkeys.ExecutorMetadataKey) {
-					// Check if value actually changed (skip if same value written again)
-					if event.PrevKv != nil && string(event.Kv.Value) == string(event.PrevKv.Value) {
-						continue
+					// Schedule a debounced refresh if not already pending
+					if !refreshPending {
+						refreshPending = true
+						debounceTimer.Reset(refreshDebounceInterval)
 					}
-					shouldRefresh = true
 					break
-				}
-			}
-
-			if shouldRefresh {
-				err := n.refresh(context.Background())
-				if err != nil {
-					n.logger.Error("failed to refresh namespace shard to executor", tag.Error(err))
 				}
 			}
 		}
