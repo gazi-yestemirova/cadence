@@ -123,7 +123,6 @@ func (h *handlerImpl) assignEphemeralShard(ctx context.Context, namespace string
 	minAssignedShards := math.MaxInt
 
 	for assignedExecutor, assignment := range state.ShardAssignments {
-		// Skip executors that are not ACTIVE (e.g., DRAINING..)
 		executorState, ok := state.Executors[assignedExecutor]
 		if !ok || executorState.Status != types.ExecutorStatusACTIVE {
 			continue
