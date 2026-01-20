@@ -2977,6 +2977,11 @@ const (
 	ShardDistributorAssignLoopAttempts
 	ShardDistributorAssignLoopSuccess
 	ShardDistributorAssignLoopFail
+	ShardDistributorAssignLoopGetStateLatency
+	ShardDistributorAssignLoopCalculateLatency
+	ShardDistributorAssignLoopWriteLatency
+	ShardDistributorAssignLoopNumExecutors
+	ShardDistributorAssignLoopNumShards
 
 	ShardDistributorActiveShards
 
@@ -3776,6 +3781,11 @@ var MetricDefs = map[ServiceIdx]map[MetricIdx]metricDefinition{
 		ShardDistributorAssignLoopAttempts:              {metricName: "shard_distrubutor_shard_assign_attempt", metricType: Counter},
 		ShardDistributorAssignLoopSuccess:               {metricName: "shard_distrubutor_shard_assign_success", metricType: Counter},
 		ShardDistributorAssignLoopFail:                  {metricName: "shard_distrubutor_shard_assign_fail", metricType: Counter},
+		ShardDistributorAssignLoopGetStateLatency:       {metricName: "shard_distributor_assign_loop_get_state_latency", metricType: Histogram, buckets: ShardDistributorExecutorStoreLatencyBuckets},
+		ShardDistributorAssignLoopCalculateLatency:      {metricName: "shard_distributor_assign_loop_calculate_latency", metricType: Histogram, buckets: ShardDistributorExecutorStoreLatencyBuckets},
+		ShardDistributorAssignLoopWriteLatency:          {metricName: "shard_distributor_assign_loop_write_latency", metricType: Histogram, buckets: ShardDistributorExecutorStoreLatencyBuckets},
+		ShardDistributorAssignLoopNumExecutors:          {metricName: "shard_distributor_assign_loop_num_executors", metricType: Gauge},
+		ShardDistributorAssignLoopNumShards:             {metricName: "shard_distributor_assign_loop_num_shards", metricType: Gauge},
 
 		ShardDistributorActiveShards: {metricName: "shard_distributor_active_shards", metricType: Gauge},
 
