@@ -2990,6 +2990,11 @@ const (
 	ShardDistributorStoreRequestsPerNamespace
 	ShardDistributorStoreLatencyHistogramPerNamespace
 
+	// GetState internal breakdown metrics
+	ShardDistributorGetStateEtcdFetchLatency
+	ShardDistributorGetStateDeserializeLatency
+	ShardDistributorGetStateNumKeys
+
 	// ShardDistributorShardAssignmentDistributionLatency measures the time taken between assignment of a shard
 	// and the time it is fully distributed to executors
 	ShardDistributorShardAssignmentDistributionLatency
@@ -3793,6 +3798,9 @@ var MetricDefs = map[ServiceIdx]map[MetricIdx]metricDefinition{
 		ShardDistributorStoreFailuresPerNamespace:         {metricName: "shard_distributor_store_failures_per_namespace", metricType: Counter},
 		ShardDistributorStoreRequestsPerNamespace:         {metricName: "shard_distributor_store_requests_per_namespace", metricType: Counter},
 		ShardDistributorStoreLatencyHistogramPerNamespace: {metricName: "shard_distributor_store_latency_histogram_per_namespace", metricType: Histogram, buckets: ShardDistributorExecutorStoreLatencyBuckets},
+		ShardDistributorGetStateEtcdFetchLatency:          {metricName: "shard_distributor_get_state_etcd_fetch_latency", metricType: Histogram, buckets: ShardDistributorExecutorStoreLatencyBuckets},
+		ShardDistributorGetStateDeserializeLatency:        {metricName: "shard_distributor_get_state_deserialize_latency", metricType: Histogram, buckets: ShardDistributorExecutorStoreLatencyBuckets},
+		ShardDistributorGetStateNumKeys:                   {metricName: "shard_distributor_get_state_num_keys", metricType: Gauge},
 
 		ShardDistributorShardAssignmentDistributionLatency: {metricName: "shard_distributor_shard_assignment_distribution_latency", metricType: Histogram, buckets: ShardDistributorShardAssignmentLatencyBuckets},
 		ShardDistributorShardHandoverLatency:               {metricName: "shard_distributor_shard_handover_latency", metricType: Histogram, buckets: ShardDistributorShardAssignmentLatencyBuckets},
