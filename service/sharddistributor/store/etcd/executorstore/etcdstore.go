@@ -587,10 +587,33 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 
 // DeleteExecutors deletes the given executors from the store. It does not delete the shards owned by the executors, this
 // should be handled by the namespace processor loop as we want to reassign, not delete the shards.
+// Deletions are batched to avoid exceeding etcd's transaction size limit (default 128 ops).
 func (s *executorStoreImpl) DeleteExecutors(ctx context.Context, namespace string, executorIDs []string, guard store.GuardFunc) error {
 	if len(executorIDs) == 0 {
 		return nil
 	}
+
+	// etcd has a default limit of 128 operations per transaction.
+	// Batch deletions to stay under this limit.
+	const batchSize = 100
+
+	for i := 0; i < len(executorIDs); i += batchSize {
+		end := i + batchSize
+		if end > len(executorIDs) {
+			end = len(executorIDs)
+		}
+		batch := executorIDs[i:end]
+
+		if err := s.deleteExecutorsBatch(ctx, namespace, batch, guard); err != nil {
+			return fmt.Errorf("delete batch %d-%d: %w", i, end, err)
+		}
+	}
+
+	return nil
+}
+
+// deleteExecutorsBatch deletes a batch of executors in a single transaction.
+func (s *executorStoreImpl) deleteExecutorsBatch(ctx context.Context, namespace string, executorIDs []string, guard store.GuardFunc) error {
 	var ops []clientv3.Op
 
 	for _, executorID := range executorIDs {
