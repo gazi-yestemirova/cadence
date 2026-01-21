@@ -385,7 +385,10 @@ func (p *namespaceProcessor) rebalanceShardsImpl(ctx context.Context, metricsLoo
 		// Still cleanup stale executors even if no active executors remain
 		if len(staleExecutors) > 0 {
 			p.logger.Info("Cleaning up stale executors (no active executors)", tag.ShardExecutors(slices.Collect(maps.Keys(staleExecutors))))
-			if err := p.shardStore.DeleteExecutors(ctx, p.namespaceCfg.Name, slices.Collect(maps.Keys(staleExecutors)), p.election.Guard()); err != nil {
+			// Use a longer timeout for deletions since they can be slow with large databases
+			deleteCtx, deleteCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer deleteCancel()
+			if err := p.shardStore.DeleteExecutors(deleteCtx, p.namespaceCfg.Name, slices.Collect(maps.Keys(staleExecutors)), p.election.Guard()); err != nil {
 				p.logger.Error("Failed to delete stale executors", tag.Error(err))
 			}
 		}

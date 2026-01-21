@@ -610,7 +610,7 @@ func (s *executorStoreImpl) DeleteExecutors(ctx context.Context, namespace strin
 
 	// etcd has a default limit of 128 operations per transaction.
 	// Batch deletions to stay under this limit.
-	const batchSize = 100
+	const batchSize = 20
 
 	for i := 0; i < len(executorIDs); i += batchSize {
 		end := i + batchSize
