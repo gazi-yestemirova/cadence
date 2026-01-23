@@ -398,6 +398,7 @@ func (p *namespaceProcessor) rebalanceShardsImpl(ctx context.Context, metricsLoo
 	if p.sdConfig.GetMigrationMode(p.namespaceCfg.Name) != types.MigrationModeONBOARDED {
 		p.logger.Info("Running rebalancing in shadow mode", tag.Dynamic("old_assignments", namespaceState.ShardAssignments), tag.Dynamic("new_assignments", newState))
 		p.emitActiveShardMetric(namespaceState.ShardAssignments, metricsLoopScope)
+		p.emitOldestExecutorHeartbeatLag(namespaceState, metricsLoopScope)
 		return nil
 	}
 
@@ -414,6 +415,7 @@ func (p *namespaceProcessor) rebalanceShardsImpl(ctx context.Context, metricsLoo
 	}
 
 	p.emitActiveShardMetric(namespaceState.ShardAssignments, metricsLoopScope)
+	p.emitOldestExecutorHeartbeatLag(namespaceState, metricsLoopScope)
 	return nil
 }
 
@@ -423,6 +425,22 @@ func (p *namespaceProcessor) emitActiveShardMetric(shardAssignments map[string]s
 		totalActiveShards += len(assignedState.AssignedShards)
 	}
 	metricsLoopScope.UpdateGauge(metrics.ShardDistributorActiveShards, float64(totalActiveShards))
+}
+
+func (p *namespaceProcessor) emitOldestExecutorHeartbeatLag(namespaceState *store.NamespaceState, metricsLoopScope metrics.Scope) {
+	if len(namespaceState.Executors) == 0 {
+		return
+	}
+
+	var oldestHeartbeat time.Time
+	for _, executor := range namespaceState.Executors {
+		if oldestHeartbeat.IsZero() || executor.LastHeartbeat.Before(oldestHeartbeat) {
+			oldestHeartbeat = executor.LastHeartbeat
+		}
+	}
+
+	lag := p.timeSource.Now().Sub(oldestHeartbeat)
+	metricsLoopScope.UpdateGauge(metrics.ShardDistributorOldestExecutorHeartbeatLag, lag.Seconds())
 }
 
 func (p *namespaceProcessor) findDeletedShards(namespaceState *store.NamespaceState) map[string]store.ShardState {

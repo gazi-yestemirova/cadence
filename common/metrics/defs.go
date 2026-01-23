@@ -2979,6 +2979,7 @@ const (
 	ShardDistributorAssignLoopFail
 
 	ShardDistributorActiveShards
+	ShardDistributorOldestExecutorHeartbeatLag
 
 	ShardDistributorStoreExecutorNotFound
 	ShardDistributorStoreFailuresPerNamespace
@@ -3777,7 +3778,8 @@ var MetricDefs = map[ServiceIdx]map[MetricIdx]metricDefinition{
 		ShardDistributorAssignLoopSuccess:               {metricName: "shard_distrubutor_shard_assign_success", metricType: Counter},
 		ShardDistributorAssignLoopFail:                  {metricName: "shard_distrubutor_shard_assign_fail", metricType: Counter},
 
-		ShardDistributorActiveShards: {metricName: "shard_distributor_active_shards", metricType: Gauge},
+		ShardDistributorActiveShards:               {metricName: "shard_distributor_active_shards", metricType: Gauge},
+		ShardDistributorOldestExecutorHeartbeatLag: {metricName: "shard_distributor_oldest_executor_heartbeat_lag", metricType: Gauge},
 
 		ShardDistributorStoreExecutorNotFound:             {metricName: "shard_distributor_store_executor_not_found", metricType: Counter},
 		ShardDistributorStoreFailuresPerNamespace:         {metricName: "shard_distributor_store_failures_per_namespace", metricType: Counter},
