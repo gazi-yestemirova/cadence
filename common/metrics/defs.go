@@ -1489,6 +1489,7 @@ const (
 	ShardDistributorStoreRecordHeartbeatScope
 	ShardDistributorStoreSubscribeScope
 	ShardDistributorStoreSubscribeToAssignmentChangesScope
+	ShardDistributorStoreDeleteAssignedStatesScope
 
 	// The scope for the shard distributor executor
 	ShardDistributorExecutorScope
@@ -2180,6 +2181,7 @@ var ScopeDefs = map[ServiceIdx]map[ScopeIdx]scopeDefinition{
 		ShardDistributorStoreRecordHeartbeatScope:              {operation: "StoreRecordHeartbeat"},
 		ShardDistributorStoreSubscribeScope:                    {operation: "StoreSubscribe"},
 		ShardDistributorStoreSubscribeToAssignmentChangesScope: {operation: "StoreSubscribeToAssignmentChanges"},
+		ShardDistributorStoreDeleteAssignedStatesScope:         {operation: "StoreDeleteAssignedStates"},
 	},
 }
 
@@ -2468,6 +2470,8 @@ const (
 	BudgetManagerActiveCacheCount
 	BudgetManagerHardCapExceeded
 	BudgetManagerSoftCapExceeded
+
+	WeightedChannelPoolSizeGauge
 
 	NumCommonMetrics // Needs to be last on this list for iota numbering
 )
@@ -2979,6 +2983,7 @@ const (
 	ShardDistributorAssignLoopFail
 
 	ShardDistributorActiveShards
+	ShardDistributorTotalExecutors
 	ShardDistributorOldestExecutorHeartbeatLag
 
 	ShardDistributorStoreExecutorNotFound
@@ -3294,6 +3299,8 @@ var MetricDefs = map[ServiceIdx]map[MetricIdx]metricDefinition{
 		BudgetManagerActiveCacheCount: {metricName: "budget_manager_active_cache_count", metricType: Gauge},
 		BudgetManagerHardCapExceeded:  {metricName: "budget_manager_hard_cap_exceeded", metricType: Counter},
 		BudgetManagerSoftCapExceeded:  {metricName: "budget_manager_soft_cap_exceeded", metricType: Counter},
+
+		WeightedChannelPoolSizeGauge: {metricName: "weighted_channel_pool_size", metricType: Gauge},
 	},
 	History: {
 		TaskRequests:                     {metricName: "task_requests", metricType: Counter},
@@ -3779,6 +3786,7 @@ var MetricDefs = map[ServiceIdx]map[MetricIdx]metricDefinition{
 		ShardDistributorAssignLoopFail:                  {metricName: "shard_distrubutor_shard_assign_fail", metricType: Counter},
 
 		ShardDistributorActiveShards:               {metricName: "shard_distributor_active_shards", metricType: Gauge},
+		ShardDistributorTotalExecutors:             {metricName: "shard_distributor_total_executors", metricType: Gauge},
 		ShardDistributorOldestExecutorHeartbeatLag: {metricName: "shard_distributor_oldest_executor_heartbeat_lag", metricType: Gauge},
 
 		ShardDistributorStoreExecutorNotFound:             {metricName: "shard_distributor_store_executor_not_found", metricType: Counter},
