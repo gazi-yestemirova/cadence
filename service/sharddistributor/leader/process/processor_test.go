@@ -3,7 +3,6 @@ package process
 import (
 	"context"
 	"errors"
-	"github.com/uber/cadence/common"
 	"slices"
 	"sync"
 	"testing"
@@ -14,6 +13,7 @@ import (
 	"go.uber.org/goleak"
 	"go.uber.org/mock/gomock"
 
+	"github.com/uber/cadence/common"
 	"github.com/uber/cadence/common/clock"
 	"github.com/uber/cadence/common/dynamicconfig/dynamicproperties"
 	"github.com/uber/cadence/common/log/testlogger"
