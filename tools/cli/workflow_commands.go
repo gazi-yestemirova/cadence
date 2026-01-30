@@ -152,10 +152,11 @@ func RefreshWorkflowTasks(c *cli.Context) error {
 	rid := c.String(FlagRunID)
 
 	ctx, cancel, err := newContext(c)
-	defer cancel()
 	if err != nil {
 		return commoncli.Problem("Error creating context: ", err)
 	}
+	defer cancel()
+
 	err = wfClient.RefreshWorkflowTasks(ctx, &types.RefreshWorkflowTasksRequest{
 		Domain: domain,
 		Execution: &types.WorkflowExecution{
