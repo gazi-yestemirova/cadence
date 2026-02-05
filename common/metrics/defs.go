@@ -848,6 +848,8 @@ const (
 	// TaskSchedulerRateLimiterScope is used by task scheduler rate limiter logic
 	TaskSchedulerRateLimiterScope
 
+	// HistoryEngineScope is used by history engine for areas that aren't covered by other, more specific scopes
+	HistoryEngineScope
 	// HistoryArchiverScope is used by history archivers
 	HistoryArchiverScope
 	// VisibilityArchiverScope is used by visibility archivers
@@ -1487,6 +1489,7 @@ const (
 	ShardDistributorStoreRecordHeartbeatScope
 	ShardDistributorStoreSubscribeScope
 	ShardDistributorStoreSubscribeToAssignmentChangesScope
+	ShardDistributorStoreDeleteAssignedStatesScope
 
 	// The scope for the shard distributor executor
 	ShardDistributorExecutorScope
@@ -1852,6 +1855,7 @@ var ScopeDefs = map[ServiceIdx]map[ScopeIdx]scopeDefinition{
 		TaskSchedulerScope:                                         {operation: "TaskScheduler"},
 		TaskSchedulerRateLimiterScope:                              {operation: "TaskSchedulerRateLimiter"},
 
+		HistoryEngineScope:      {operation: "HistoryEngine"},
 		HistoryArchiverScope:    {operation: "HistoryArchiver"},
 		VisibilityArchiverScope: {operation: "VisibilityArchiver"},
 
@@ -2180,6 +2184,7 @@ var ScopeDefs = map[ServiceIdx]map[ScopeIdx]scopeDefinition{
 		ShardDistributorStoreRecordHeartbeatScope:              {operation: "StoreRecordHeartbeat"},
 		ShardDistributorStoreSubscribeScope:                    {operation: "StoreSubscribe"},
 		ShardDistributorStoreSubscribeToAssignmentChangesScope: {operation: "StoreSubscribeToAssignmentChanges"},
+		ShardDistributorStoreDeleteAssignedStatesScope:         {operation: "StoreDeleteAssignedStates"},
 		ShardDistributorWatchScope:                             {operation: "Watch"},
 	},
 }
@@ -2225,7 +2230,6 @@ const (
 	PersistenceFailures
 	PersistenceLatency
 	PersistenceLatencyHistogram
-	PersistenceQuota
 	PersistenceErrShardExistsCounter
 	PersistenceErrShardOwnershipLostCounter
 	PersistenceErrConditionFailedCounter
@@ -2390,6 +2394,7 @@ const (
 	CadenceErrAuthorizeFailedPerTaskListCounter
 	CadenceErrRemoteSyncMatchFailedPerTaskListCounter
 	CadenceErrStickyWorkerUnavailablePerTaskListCounter
+	CadenceErrReadOnlyPartitionPerTaskListCounter
 	CadenceErrTaskListNotOwnedByHostPerTaskListCounter
 
 	CadenceShardSuccessGauge
@@ -2469,6 +2474,8 @@ const (
 	BudgetManagerActiveCacheCount
 	BudgetManagerHardCapExceeded
 	BudgetManagerSoftCapExceeded
+
+	WeightedChannelPoolSizeGauge
 
 	NumCommonMetrics // Needs to be last on this list for iota numbering
 )
@@ -2688,6 +2695,14 @@ const (
 	WorkflowTerminateCount
 	WorkflowContinuedAsNew
 	WorkflowCompletedUnknownType
+	// WorkflowCreationFailedCleanupHaltedTimeoutCount is where the attempt to cleanup after wf start failure was halted due to a timeout making it uncertain if it's safe
+	WorkflowCreationFailedCleanupHaltedTimeoutCount
+	// WorkflowCreationFailedCleanupUnknownCount is where the attempt to cleanup after wf start failure was halted due to not having enough certainty
+	WorkflowCreationFailedCleanupUnknownCount
+	// WorkflowCreationFailedCleanupSuccessCount is where the attempt to cleanup after wf start failure was successful
+	WorkflowCreationFailedCleanupSuccessCount
+	// WorkflowCreationFailedCleanupFailureCount is where the attempt to cleanup after wf start failure also resulted in failure
+	WorkflowCreationFailedCleanupFailureCount
 	ArchiverClientSendSignalCount
 	ArchiverClientSendSignalFailureCount
 	ArchiverClientHistoryRequestCount
@@ -2972,6 +2987,8 @@ const (
 	ShardDistributorAssignLoopFail
 
 	ShardDistributorActiveShards
+	ShardDistributorTotalExecutors
+	ShardDistributorOldestExecutorHeartbeatLag
 
 	ShardDistributorStoreExecutorNotFound
 	ShardDistributorStoreFailuresPerNamespace
@@ -2991,8 +3008,6 @@ const (
 	ShardDistributorWatchProcessingLatency
 	// ShardDistributorWatchEventsReceived counts the total number of watch events received
 	ShardDistributorWatchEventsReceived
-	// ShardDistributorWatchRefreshTotal counts the total number of refresh operations triggered by watch
-	ShardDistributorWatchRefreshTotal
 
 	NumShardDistributorMetrics
 )
@@ -3039,7 +3054,6 @@ var MetricDefs = map[ServiceIdx]map[MetricIdx]metricDefinition{
 		PersistenceFailures:                                          {metricName: "persistence_errors", metricType: Counter},
 		PersistenceLatency:                                           {metricName: "persistence_latency", metricType: Timer},
 		PersistenceLatencyHistogram:                                  {metricName: "persistence_latency_histogram", metricType: Histogram, buckets: PersistenceLatencyBuckets},
-		PersistenceQuota:                                             {metricName: "persistence_quota", metricType: Gauge},
 		PersistenceErrShardExistsCounter:                             {metricName: "persistence_errors_shard_exists", metricType: Counter},
 		PersistenceErrShardOwnershipLostCounter:                      {metricName: "persistence_errors_shard_ownership_lost", metricType: Counter},
 		PersistenceErrConditionFailedCounter:                         {metricName: "persistence_errors_condition_failed", metricType: Counter},
@@ -3224,6 +3238,9 @@ var MetricDefs = map[ServiceIdx]map[MetricIdx]metricDefinition{
 		CadenceErrStickyWorkerUnavailablePerTaskListCounter: {
 			metricName: "cadence_errors_sticky_worker_unavailable_per_tl", metricRollupName: "cadence_errors_sticky_worker_unavailable_per_tl", metricType: Counter,
 		},
+		CadenceErrReadOnlyPartitionPerTaskListCounter: {
+			metricName: "cadence_errors_read_only_partition_per_tl", metricRollupName: "cadence_errors_read_only_partition", metricType: Counter,
+		},
 		CadenceErrTaskListNotOwnedByHostPerTaskListCounter: {
 			metricName: "cadence_errors_task_list_not_owned_by_host_per_tl", metricRollupName: "cadence_errors_task_list_not_owned_by_host", metricType: Counter,
 		},
@@ -3295,6 +3312,8 @@ var MetricDefs = map[ServiceIdx]map[MetricIdx]metricDefinition{
 		BudgetManagerActiveCacheCount: {metricName: "budget_manager_active_cache_count", metricType: Gauge},
 		BudgetManagerHardCapExceeded:  {metricName: "budget_manager_hard_cap_exceeded", metricType: Counter},
 		BudgetManagerSoftCapExceeded:  {metricName: "budget_manager_soft_cap_exceeded", metricType: Counter},
+
+		WeightedChannelPoolSizeGauge: {metricName: "weighted_channel_pool_size", metricType: Gauge},
 	},
 	History: {
 		TaskRequests:                     {metricName: "task_requests", metricType: Counter},
@@ -3501,6 +3520,10 @@ var MetricDefs = map[ServiceIdx]map[MetricIdx]metricDefinition{
 		WorkflowTerminateCount:                                       {metricName: "workflow_terminate", metricType: Counter},
 		WorkflowContinuedAsNew:                                       {metricName: "workflow_continued_as_new", metricType: Counter},
 		WorkflowCompletedUnknownType:                                 {metricName: "workflow_completed_unknown_type", metricType: Counter},
+		WorkflowCreationFailedCleanupHaltedTimeoutCount:              {metricName: "workflow_creation_failed_cleanup_halted_timeout_count", metricType: Counter}, // where an attempt to cleanup after wf start failure was halted due to a timeout making it uncertain if it's safe
+		WorkflowCreationFailedCleanupUnknownCount:                    {metricName: "workflow_creation_failed_cleanup_unknown_count", metricType: Counter},        // where an attempt to cleanup after wf start failure was halted due to not having enough certainty
+		WorkflowCreationFailedCleanupSuccessCount:                    {metricName: "workflow_creation_failed_cleanup_success_count", metricType: Counter},        // where an attempt to cleanup after wf start failure failure was successful
+		WorkflowCreationFailedCleanupFailureCount:                    {metricName: "workflow_creation_failed_cleanup_failure_count", metricType: Counter},        // where an attempt to cleanup in failure also resulted in failure
 		ArchiverClientSendSignalCount:                                {metricName: "archiver_client_sent_signal", metricType: Counter},
 		ArchiverClientSendSignalFailureCount:                         {metricName: "archiver_client_send_signal_error", metricType: Counter},
 		ArchiverClientHistoryRequestCount:                            {metricName: "archiver_client_history_request", metricType: Counter},
@@ -3775,20 +3798,21 @@ var MetricDefs = map[ServiceIdx]map[MetricIdx]metricDefinition{
 		ShardDistributorAssignLoopSuccess:               {metricName: "shard_distrubutor_shard_assign_success", metricType: Counter},
 		ShardDistributorAssignLoopFail:                  {metricName: "shard_distrubutor_shard_assign_fail", metricType: Counter},
 
-		ShardDistributorActiveShards: {metricName: "shard_distributor_active_shards", metricType: Gauge},
+		ShardDistributorActiveShards:               {metricName: "shard_distributor_active_shards", metricType: Gauge},
+		ShardDistributorTotalExecutors:             {metricName: "shard_distributor_total_executors", metricType: Gauge},
+		ShardDistributorOldestExecutorHeartbeatLag: {metricName: "shard_distributor_oldest_executor_heartbeat_lag", metricType: Gauge},
 
 		ShardDistributorStoreExecutorNotFound:             {metricName: "shard_distributor_store_executor_not_found", metricType: Counter},
 		ShardDistributorStoreFailuresPerNamespace:         {metricName: "shard_distributor_store_failures_per_namespace", metricType: Counter},
 		ShardDistributorStoreRequestsPerNamespace:         {metricName: "shard_distributor_store_requests_per_namespace", metricType: Counter},
 		ShardDistributorStoreLatencyHistogramPerNamespace: {metricName: "shard_distributor_store_latency_histogram_per_namespace", metricType: Histogram, buckets: ShardDistributorExecutorStoreLatencyBuckets},
 
-		ShardDistributorShardAssignmentDistributionLatency: {metricName: "shard_distributor_shard_assignment_distribution_latency", metricType: Histogram, buckets: Default1ms100s.buckets()},
-		ShardDistributorShardHandoverLatency:               {metricName: "shard_distributor_shard_handover_latency", metricType: Histogram, buckets: Default1ms100s.buckets()},
+		ShardDistributorShardAssignmentDistributionLatency: {metricName: "shard_distributor_shard_assignment_distribution_latency", metricType: Histogram, buckets: ShardDistributorShardAssignmentLatencyBuckets},
+		ShardDistributorShardHandoverLatency:               {metricName: "shard_distributor_shard_handover_latency", metricType: Histogram, buckets: ShardDistributorShardAssignmentLatencyBuckets},
 
 		ShardDistributorWatchConsumerLag:       {metricName: "shard_distributor_watch_consumer_lag", metricType: Gauge},
 		ShardDistributorWatchProcessingLatency: {metricName: "shard_distributor_watch_processing_latency", metricType: Histogram, buckets: Default1ms100s.buckets()},
 		ShardDistributorWatchEventsReceived:    {metricName: "shard_distributor_watch_events_received", metricType: Counter},
-		ShardDistributorWatchRefreshTotal:      {metricName: "shard_distributor_watch_refresh_total", metricType: Counter},
 	},
 }
 
@@ -3891,6 +3915,45 @@ var (
 		40 * time.Second,
 		50 * time.Second,
 		60 * time.Second,
+	})
+
+	ShardDistributorShardAssignmentLatencyBuckets = tally.DurationBuckets([]time.Duration{
+		// ShardDistributorShardHandoverLatency for GracefulHandoverType should be within 0s and 1s
+
+		0,
+		50 * time.Millisecond,
+		100 * time.Millisecond,
+		200 * time.Millisecond,
+		300 * time.Millisecond,
+		400 * time.Millisecond,
+		500 * time.Millisecond,
+		600 * time.Millisecond,
+		700 * time.Millisecond,
+		800 * time.Millisecond,
+		900 * time.Millisecond,
+
+		// ShardDistributorShardHandoverLatency for EmergencyHandoverType should be within 0s and 10s
+		1 * time.Second,
+		2 * time.Second,
+		3 * time.Second,
+		4 * time.Second,
+		5 * time.Second,
+		6 * time.Second,
+		7 * time.Second,
+		8 * time.Second,
+		9 * time.Second,
+		10 * time.Second,
+
+		12 * time.Second,
+		15 * time.Second,
+		20 * time.Second,
+		30 * time.Second,
+		45 * time.Second,
+
+		1 * time.Minute,
+		2 * time.Minute,
+		5 * time.Minute,
+		10 * time.Minute,
 	})
 
 	// ReplicationTaskDelayBucket contains buckets for replication task delay

@@ -193,8 +193,6 @@ func (n *namespaceShardToExecutor) watch() error {
 			}
 
 			if shouldRefresh {
-				// Metric 4: Track refresh operations
-				metricsScope.IncCounter(metrics.ShardDistributorWatchRefreshTotal)
 				if err := n.refresh(context.Background()); err != nil {
 					n.logger.Error("failed to refresh namespace shard to executor", tag.Error(err))
 				}

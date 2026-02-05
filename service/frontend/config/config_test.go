@@ -79,7 +79,6 @@ func TestNewConfig(t *testing.T) {
 		"WorkflowTypeMaxLength":                             {dynamicproperties.WorkflowTypeMaxLength, 25},
 		"RequestIDMaxLength":                                {dynamicproperties.RequestIDMaxLength, 26},
 		"TaskListNameMaxLength":                             {dynamicproperties.TaskListNameMaxLength, 27},
-		"HistoryMgrNumConns":                                {dynamicproperties.FrontendHistoryMgrNumConns, 28},
 		"EnableAdminProtection":                             {dynamicproperties.EnableAdminProtection, true},
 		"AdminOperationToken":                               {dynamicproperties.AdminOperationToken, "token"},
 		"DisableListVisibilityByFilter":                     {dynamicproperties.DisableListVisibilityByFilter, false},
@@ -110,6 +109,7 @@ func TestNewConfig(t *testing.T) {
 		"GlobalRatelimiterUpdateInterval":                   {dynamicproperties.GlobalRatelimiterUpdateInterval, 3 * time.Second},
 		"PinotOptimizedQueryColumns":                        {dynamicproperties.PinotOptimizedQueryColumns, map[string]interface{}{"foo": "bar"}},
 		"EnableDomainAuditLogging":                          {dynamicproperties.EnableDomainAuditLogging, true},
+		"RateLimiterBypassCallerTypes":                      {dynamicproperties.RateLimiterBypassCallerTypes, []interface{}{"cli", "ui"}},
 	}
 	domainFields := map[string]configTestCase{
 		"MaxBadBinaryCount":        {dynamicproperties.FrontendMaxBadBinaries, 40},
@@ -183,6 +183,8 @@ func getValue(f *reflect.Value) interface{} {
 			return fn("user:domain")
 		case dynamicproperties.StringPropertyFnWithDomainFilter:
 			return fn("domain")
+		case dynamicproperties.ListPropertyFn:
+			return fn()
 		default:
 			panic("Unable to handle type: " + f.Type().Name())
 		}

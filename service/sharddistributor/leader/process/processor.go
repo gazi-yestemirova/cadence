@@ -374,6 +374,14 @@ func (p *namespaceProcessor) rebalanceShardsImpl(ctx context.Context, metricsLoo
 	activeExecutors := p.getActiveExecutors(namespaceState, staleExecutors)
 	if len(activeExecutors) == 0 {
 		p.logger.Info("No active executors found. Cannot assign shards.")
+
+		// Cleanup stale executors even if no active executors remain
+		if len(staleExecutors) > 0 {
+			p.logger.Info("Cleaning up stale executors (no active executors)", tag.ShardExecutors(slices.Collect(maps.Keys(staleExecutors))))
+			if err := p.shardStore.DeleteExecutors(ctx, p.namespaceCfg.Name, slices.Collect(maps.Keys(staleExecutors)), p.election.Guard()); err != nil {
+				p.logger.Error("Failed to delete stale executors", tag.Error(err))
+			}
+		}
 		return nil
 	}
 	p.logger.Info("Active executors", tag.ShardExecutors(activeExecutors))
@@ -395,9 +403,21 @@ func (p *namespaceProcessor) rebalanceShardsImpl(ctx context.Context, metricsLoo
 	}
 
 	newState := p.getNewAssignmentsState(namespaceState, currentAssignments)
+
+	p.emitExecutorMetric(namespaceState, metricsLoopScope)
+	p.emitOldestExecutorHeartbeatLag(namespaceState, metricsLoopScope)
+
 	if p.sdConfig.GetMigrationMode(p.namespaceCfg.Name) != types.MigrationModeONBOARDED {
 		p.logger.Info("Running rebalancing in shadow mode", tag.Dynamic("old_assignments", namespaceState.ShardAssignments), tag.Dynamic("new_assignments", newState))
 		p.emitActiveShardMetric(namespaceState.ShardAssignments, metricsLoopScope)
+
+		if len(staleExecutors) > 0 {
+			p.logger.Info("Cleaning up stale executors in shadow mode", tag.ShardExecutors(slices.Collect(maps.Keys(staleExecutors))))
+			if err := p.shardStore.DeleteExecutors(ctx, p.namespaceCfg.Name, slices.Collect(maps.Keys(staleExecutors)), p.election.Guard()); err != nil {
+				p.logger.Error("Failed to delete stale executors in shadow mode", tag.Error(err))
+				// Non-blocking: stale executors in shadow mode will be cleaned up the next cycle
+			}
+		}
 		return nil
 	}
 
@@ -423,6 +443,28 @@ func (p *namespaceProcessor) emitActiveShardMetric(shardAssignments map[string]s
 		totalActiveShards += len(assignedState.AssignedShards)
 	}
 	metricsLoopScope.UpdateGauge(metrics.ShardDistributorActiveShards, float64(totalActiveShards))
+}
+
+func (p *namespaceProcessor) emitExecutorMetric(namespaceState *store.NamespaceState, metricsLoopScope metrics.Scope) {
+	for status, count := range namespaceState.CountExecutorsByStatus() {
+		metricsLoopScope.Tagged(metrics.ExecutorStatusTag(status.String())).UpdateGauge(metrics.ShardDistributorTotalExecutors, float64(count))
+	}
+}
+
+func (p *namespaceProcessor) emitOldestExecutorHeartbeatLag(namespaceState *store.NamespaceState, metricsLoopScope metrics.Scope) {
+	if len(namespaceState.Executors) == 0 {
+		return
+	}
+
+	var oldestHeartbeat time.Time
+	for _, executor := range namespaceState.Executors {
+		if oldestHeartbeat.IsZero() || executor.LastHeartbeat.Before(oldestHeartbeat) {
+			oldestHeartbeat = executor.LastHeartbeat
+		}
+	}
+
+	lag := p.timeSource.Now().Sub(oldestHeartbeat)
+	metricsLoopScope.UpdateGauge(metrics.ShardDistributorOldestExecutorHeartbeatLag, float64(lag.Milliseconds()))
 }
 
 func (p *namespaceProcessor) findDeletedShards(namespaceState *store.NamespaceState) map[string]store.ShardState {
