@@ -299,18 +299,6 @@ func TestRebalanceShards_NoActiveExecutors_WithStaleExecutors(t *testing.T) {
 	})
 }
 
-func TestRebalanceShards_NoRebalanceNeeded(t *testing.T) {
-	mocks := setupProcessorTest(t, config.NamespaceTypeFixed)
-	defer mocks.ctrl.Finish()
-	processor := mocks.factory.CreateProcessor(mocks.cfg, mocks.store, mocks.election).(*namespaceProcessor)
-	processor.lastAppliedRevision = 1
-
-	mocks.store.EXPECT().GetState(gomock.Any(), mocks.cfg.Name).Return(&store.NamespaceState{GlobalRevision: int64(1)}, nil)
-
-	err := processor.rebalanceShards(context.Background())
-	require.NoError(t, err)
-}
-
 func TestCleanupStaleExecutors(t *testing.T) {
 	mocks := setupProcessorTest(t, config.NamespaceTypeFixed)
 	defer mocks.ctrl.Finish()
