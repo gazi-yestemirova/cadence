@@ -38,11 +38,6 @@ type (
 		LoadBalancingMode dynamicproperties.StringPropertyFnWithNamespaceFilters
 		MigrationMode     dynamicproperties.StringPropertyFnWithNamespaceFilters
 
-		// ShutdownDrainDuration is the duration the shard-distributor waits after resigning
-		// from leader election before fully shutting down. This allows time for leadership
-		// to transfer to another zone during UDG zone drains.
-		ShutdownDrainDuration dynamicproperties.DurationPropertyFn
-
 		LoadBalancingNaive LoadBalancingNaiveConfig
 	}
 
@@ -130,9 +125,8 @@ var MigrationMode = map[string]types.MigrationMode{
 // NewConfig returns a new instance of Config
 func NewConfig(dc *dynamicconfig.Collection) *Config {
 	return &Config{
-		LoadBalancingMode:     dc.GetStringPropertyFilteredByNamespace(dynamicproperties.ShardDistributorLoadBalancingMode),
-		MigrationMode:         dc.GetStringPropertyFilteredByNamespace(dynamicproperties.ShardDistributorMigrationMode),
-		ShutdownDrainDuration: dc.GetDurationProperty(dynamicproperties.ShardDistributorShutdownDrainDuration),
+		LoadBalancingMode: dc.GetStringPropertyFilteredByNamespace(dynamicproperties.ShardDistributorLoadBalancingMode),
+		MigrationMode:     dc.GetStringPropertyFilteredByNamespace(dynamicproperties.ShardDistributorMigrationMode),
 
 		LoadBalancingNaive: LoadBalancingNaiveConfig{
 			MaxDeviation: dc.GetFloat64PropertyFilteredByNamespace(dynamicproperties.ShardDistributorLoadBalancingNaiveMaxDeviation),

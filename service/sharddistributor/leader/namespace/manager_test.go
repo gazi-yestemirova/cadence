@@ -11,7 +11,6 @@ import (
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/mock/gomock"
 
-	"github.com/uber/cadence/common/dynamicconfig/dynamicproperties"
 	"github.com/uber/cadence/common/log/testlogger"
 	"github.com/uber/cadence/service/sharddistributor/config"
 	"github.com/uber/cadence/service/sharddistributor/leader/election"
@@ -32,7 +31,6 @@ func TestNewManager(t *testing.T) {
 	// Test
 	manager := NewManager(ManagerParams{
 		Cfg:             cfg,
-		SDConfig:        nil,
 		Logger:          logger,
 		ElectionFactory: electionFactory,
 		Lifecycle:       fxtest.NewLifecycle(t),
@@ -162,115 +160,6 @@ func TestStopManager(t *testing.T) {
 
 	// Assert
 	assert.NoError(t, err)
-}
-
-func TestStopManager_WithDrainDuration(t *testing.T) {
-	// Setup
-	logger := testlogger.New(t)
-	ctrl := gomock.NewController(t)
-	electionFactory := election.NewMockFactory(ctrl)
-	elector := election.NewMockElector(ctrl)
-
-	electionFactory.EXPECT().CreateElector(gomock.Any(), gomock.Any()).Return(elector, nil)
-
-	leaderCh := make(chan bool)
-	elector.EXPECT().Run(gomock.Any()).DoAndReturn(func(ctx context.Context) <-chan bool {
-		go func() {
-			<-ctx.Done()
-			close(leaderCh)
-		}()
-		return (<-chan bool)(leaderCh)
-	})
-
-	drainDuration := 100 * time.Millisecond
-	sdConfig := &config.Config{
-		ShutdownDrainDuration: func(opts ...dynamicproperties.FilterOption) time.Duration {
-			return drainDuration
-		},
-	}
-
-	cfg := config.ShardDistribution{
-		Namespaces: []config.Namespace{
-			{Name: "test-namespace"},
-		},
-	}
-
-	manager := &Manager{
-		cfg:             cfg,
-		sdConfig:        sdConfig,
-		logger:          logger,
-		electionFactory: electionFactory,
-		namespaces:      make(map[string]*namespaceHandler),
-	}
-
-	_ = manager.Start(context.Background())
-	time.Sleep(time.Millisecond)
-
-	// Test - Stop should wait for drain duration
-	start := time.Now()
-	err := manager.Stop(context.Background())
-	elapsed := time.Since(start)
-
-	// Assert
-	assert.NoError(t, err)
-	assert.GreaterOrEqual(t, elapsed, drainDuration, "Stop should wait for at least the drain duration")
-}
-
-func TestStopManager_DrainInterruptedByContext(t *testing.T) {
-	// Setup
-	logger := testlogger.New(t)
-	ctrl := gomock.NewController(t)
-	electionFactory := election.NewMockFactory(ctrl)
-	elector := election.NewMockElector(ctrl)
-
-	electionFactory.EXPECT().CreateElector(gomock.Any(), gomock.Any()).Return(elector, nil)
-
-	leaderCh := make(chan bool)
-	elector.EXPECT().Run(gomock.Any()).DoAndReturn(func(ctx context.Context) <-chan bool {
-		go func() {
-			<-ctx.Done()
-			close(leaderCh)
-		}()
-		return (<-chan bool)(leaderCh)
-	})
-
-	// Set a long drain duration
-	drainDuration := 10 * time.Second
-	sdConfig := &config.Config{
-		ShutdownDrainDuration: func(opts ...dynamicproperties.FilterOption) time.Duration {
-			return drainDuration
-		},
-	}
-
-	cfg := config.ShardDistribution{
-		Namespaces: []config.Namespace{
-			{Name: "test-namespace"},
-		},
-	}
-
-	manager := &Manager{
-		cfg:             cfg,
-		sdConfig:        sdConfig,
-		logger:          logger,
-		electionFactory: electionFactory,
-		namespaces:      make(map[string]*namespaceHandler),
-	}
-
-	_ = manager.Start(context.Background())
-	time.Sleep(time.Millisecond)
-
-	// Test - Stop with a short context timeout should interrupt the drain
-	shortTimeout := 100 * time.Millisecond
-	ctx, cancel := context.WithTimeout(context.Background(), shortTimeout)
-	defer cancel()
-
-	start := time.Now()
-	err := manager.Stop(ctx)
-	elapsed := time.Since(start)
-
-	// Assert
-	assert.NoError(t, err)
-	assert.Less(t, elapsed, drainDuration, "Stop should be interrupted by context timeout")
 }
 
 func TestHandleNamespaceAlreadyExists(t *testing.T) {

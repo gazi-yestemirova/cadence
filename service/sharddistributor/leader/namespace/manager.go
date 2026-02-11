@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"go.uber.org/fx"
 
@@ -22,7 +21,6 @@ var Module = fx.Module(
 
 type Manager struct {
 	cfg             config.ShardDistribution
-	sdConfig        *config.Config
 	logger          log.Logger
 	electionFactory election.Factory
 	namespaces      map[string]*namespaceHandler
@@ -42,7 +40,6 @@ type ManagerParams struct {
 	fx.In
 
 	Cfg             config.ShardDistribution
-	SDConfig        *config.Config
 	Logger          log.Logger
 	ElectionFactory election.Factory
 	Lifecycle       fx.Lifecycle
@@ -52,7 +49,6 @@ type ManagerParams struct {
 func NewManager(p ManagerParams) *Manager {
 	manager := &Manager{
 		cfg:             p.Cfg,
-		sdConfig:        p.SDConfig,
 		logger:          p.Logger.WithTags(tag.ComponentNamespaceManager),
 		electionFactory: p.ElectionFactory,
 		namespaces:      make(map[string]*namespaceHandler),
@@ -78,16 +74,16 @@ func (m *Manager) Start(ctx context.Context) error {
 }
 
 // Stop gracefully stops all namespace handlers.
-// It follows the same drain pattern as history and matching services:
-// 1. Cancel election contexts to resign from leadership
-// 2. Wait for all electors to fully resign (including etcd cleanup)
-// 3. Wait for shutdown drain duration to allow leadership transfer to another zone
+// When SIGTERM is received (e.g., during UDG zone drain), this method:
+// 1. Cancels all election contexts to trigger resign from etcd leadership
+// 2. Waits for all electors to fully resign (including etcd cleanup)
+// This ensures the etcd leadership key is released immediately, allowing
+// instances in other zones to campaign and win without waiting for session TTL expiry.
 func (m *Manager) Stop(ctx context.Context) error {
 	if m.cancel == nil {
 		return fmt.Errorf("manager was not running")
 	}
 
-	// Step 1 & 2: Cancel all election contexts and wait for resign to complete
 	m.logger.Info("ShutdownHandler: Resigning from all leader elections")
 	m.cancel()
 
@@ -98,27 +94,7 @@ func (m *Manager) Stop(ctx context.Context) error {
 		}
 	}
 
-	// Step 3: Wait for drain duration to allow leadership transfer to another zone
-	drainDuration := m.getShutdownDrainDuration()
-	if drainDuration > 0 {
-		m.logger.Info("ShutdownHandler: Waiting for leadership transfer drain",
-			tag.Dynamic("drain-duration", drainDuration))
-		select {
-		case <-time.After(drainDuration):
-			m.logger.Info("ShutdownHandler: Drain duration completed")
-		case <-ctx.Done():
-			m.logger.Info("ShutdownHandler: Drain interrupted by shutdown timeout")
-		}
-	}
-
 	return nil
-}
-
-func (m *Manager) getShutdownDrainDuration() time.Duration {
-	if m.sdConfig != nil && m.sdConfig.ShutdownDrainDuration != nil {
-		return m.sdConfig.ShutdownDrainDuration()
-	}
-	return 0
 }
 
 // handleNamespace sets up leadership election for a namespace
