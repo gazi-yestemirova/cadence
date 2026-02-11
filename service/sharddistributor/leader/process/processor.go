@@ -68,10 +68,9 @@ type namespaceProcessor struct {
 	cancel              context.CancelFunc
 	sdConfig            *config.Config
 	cfg                 config.LeaderProcess
-	wg                  sync.WaitGroup
-	shardStore          store.Store
-	election            store.Election
-	lastAppliedRevision int64
+	wg         sync.WaitGroup
+	shardStore store.Store
+	election   store.Election
 }
 
 // NewProcessorFactory creates a new processor factory
@@ -247,13 +246,10 @@ func (p *namespaceProcessor) rebalanceTriggeringLoop(ctx context.Context, update
 		case <-ticker.Chan():
 			tryTriggerRebalancing("Periodic reconciliation triggered")
 
-		case latestRevision, ok := <-updateChan:
+		case _, ok := <-updateChan:
 			if !ok {
 				p.logger.Info("Update channel closed, stopping rebalance triggering loop")
 				return
-			}
-			if latestRevision <= p.lastAppliedRevision {
-				continue
 			}
 
 			tryTriggerRebalancing("State change detected")
@@ -399,8 +395,6 @@ func (p *namespaceProcessor) rebalanceShardsImpl(ctx context.Context, metricsLoo
 	if err != nil {
 		return fmt.Errorf("get state: %w", err)
 	}
-
-	p.lastAppliedRevision = namespaceState.GlobalRevision
 
 	// Identify stale executors that need to be removed
 	staleExecutors := p.identifyStaleExecutors(namespaceState)
