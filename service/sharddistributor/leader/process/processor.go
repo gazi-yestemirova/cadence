@@ -60,17 +60,17 @@ type processorFactory struct {
 }
 
 type namespaceProcessor struct {
-	namespaceCfg        config.Namespace
-	logger              log.Logger
-	metricsClient       metrics.Client
-	timeSource          clock.TimeSource
-	running             bool
-	cancel              context.CancelFunc
-	sdConfig            *config.Config
-	cfg                 config.LeaderProcess
-	wg         sync.WaitGroup
-	shardStore store.Store
-	election   store.Election
+	namespaceCfg  config.Namespace
+	logger        log.Logger
+	metricsClient metrics.Client
+	timeSource    clock.TimeSource
+	running       bool
+	cancel        context.CancelFunc
+	sdConfig      *config.Config
+	cfg           config.LeaderProcess
+	wg            sync.WaitGroup
+	shardStore    store.Store
+	election      store.Election
 }
 
 // NewProcessorFactory creates a new processor factory

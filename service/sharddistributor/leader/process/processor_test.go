@@ -250,7 +250,7 @@ func TestRebalanceShards_NoActiveExecutors_WithStaleExecutors(t *testing.T) {
 		expectedStaleExecutorIDs := []string{"exec-2"}
 
 		mocks.store.EXPECT().GetState(gomock.Any(), mocks.cfg.Name).Return(&store.NamespaceState{
-			Executors:      executorStates,
+			Executors: executorStates,
 		}, nil)
 
 		mocks.election.EXPECT().Guard().Return(store.NopGuard())
@@ -278,7 +278,7 @@ func TestRebalanceShards_NoActiveExecutors_WithStaleExecutors(t *testing.T) {
 		expectedStaleExecutorIDs := []string{"exec-1", "exec-2"}
 
 		mocks.store.EXPECT().GetState(gomock.Any(), mocks.cfg.Name).Return(&store.NamespaceState{
-			Executors:      executorStates,
+			Executors: executorStates,
 		}, nil)
 
 		mocks.election.EXPECT().Guard().Return(store.NopGuard())
