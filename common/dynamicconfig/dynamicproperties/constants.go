@@ -3164,6 +3164,13 @@ const (
 	// Allowed filters: DomainID
 	DomainAuditLogTTL
 
+	// ShardDistributorShutdownDrainDuration is the duration of traffic drain during shutdown
+	// KeyName: shardDistributor.shutdownDrainDuration
+	// Value type: Duration
+	// Default value: 0 (no drain)
+	// Allowed filters: N/A
+	ShardDistributorShutdownDrainDuration
+
 	// LastDurationKey must be the last one in this const group
 	LastDurationKey
 )
@@ -5703,6 +5710,11 @@ var DurationKeys = map[DurationKey]DynamicDuration{
 		Filters:      []Filter{DomainID},
 		Description:  "DomainAuditLogTTL is the TTL for domain audit log entries",
 		DefaultValue: time.Hour * 24 * 365, // 1 year
+	},
+	ShardDistributorShutdownDrainDuration: {
+		KeyName:      "shardDistributor.shutdownDrainDuration",
+		Description:  "ShardDistributorShutdownDrainDuration is the duration of traffic drain during shutdown for the shard-distributor. After resigning from leader election, the service waits for this duration to allow leadership transfer to another zone.",
+		DefaultValue: time.Duration(0),
 	},
 }
 

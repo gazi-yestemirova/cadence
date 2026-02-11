@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"go.uber.org/fx"
 
@@ -21,6 +22,7 @@ var Module = fx.Module(
 
 type Manager struct {
 	cfg             config.ShardDistribution
+	sdConfig        *config.Config
 	logger          log.Logger
 	electionFactory election.Factory
 	namespaces      map[string]*namespaceHandler
@@ -40,6 +42,7 @@ type ManagerParams struct {
 	fx.In
 
 	Cfg             config.ShardDistribution
+	SDConfig        *config.Config
 	Logger          log.Logger
 	ElectionFactory election.Factory
 	Lifecycle       fx.Lifecycle
@@ -49,6 +52,7 @@ type ManagerParams struct {
 func NewManager(p ManagerParams) *Manager {
 	manager := &Manager{
 		cfg:             p.Cfg,
+		sdConfig:        p.SDConfig,
 		logger:          p.Logger.WithTags(tag.ComponentNamespaceManager),
 		electionFactory: p.ElectionFactory,
 		namespaces:      make(map[string]*namespaceHandler),
@@ -73,22 +77,48 @@ func (m *Manager) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop gracefully stops all namespace handlers
+// Stop gracefully stops all namespace handlers.
+// It follows the same drain pattern as history and matching services:
+// 1. Cancel election contexts to resign from leadership
+// 2. Wait for all electors to fully resign (including etcd cleanup)
+// 3. Wait for shutdown drain duration to allow leadership transfer to another zone
 func (m *Manager) Stop(ctx context.Context) error {
 	if m.cancel == nil {
 		return fmt.Errorf("manager was not running")
 	}
 
+	// Step 1 & 2: Cancel all election contexts and wait for resign to complete
+	m.logger.Info("ShutdownHandler: Resigning from all leader elections")
 	m.cancel()
 
 	for ns, handler := range m.namespaces {
-		m.logger.Info("Stopping namespace handler", tag.ShardNamespace(ns))
+		m.logger.Info("ShutdownHandler: Waiting for election handler to stop", tag.ShardNamespace(ns))
 		if handler.cancel != nil {
 			handler.cancel()
 		}
 	}
 
+	// Step 3: Wait for drain duration to allow leadership transfer to another zone
+	drainDuration := m.getShutdownDrainDuration()
+	if drainDuration > 0 {
+		m.logger.Info("ShutdownHandler: Waiting for leadership transfer drain",
+			tag.Dynamic("drain-duration", drainDuration))
+		select {
+		case <-time.After(drainDuration):
+			m.logger.Info("ShutdownHandler: Drain duration completed")
+		case <-ctx.Done():
+			m.logger.Info("ShutdownHandler: Drain interrupted by shutdown timeout")
+		}
+	}
+
 	return nil
+}
+
+func (m *Manager) getShutdownDrainDuration() time.Duration {
+	if m.sdConfig != nil && m.sdConfig.ShutdownDrainDuration != nil {
+		return m.sdConfig.ShutdownDrainDuration()
+	}
+	return 0
 }
 
 // handleNamespace sets up leadership election for a namespace
@@ -126,7 +156,11 @@ func (m *Manager) handleNamespace(namespaceCfg config.Namespace) error {
 	return nil
 }
 
-// runElection manages the leadership election for a namespace
+// runElection manages the leadership election for a namespace.
+// It waits for the leaderCh to be closed (which happens after the elector goroutine
+// fully completes, including etcd resign and session cleanup). This ensures that
+// when the context is cancelled (e.g., during UDG zone drain), the elector's resign
+// operation completes before we report the handler as stopped.
 func (handler *namespaceHandler) runElection(ctx context.Context) {
 	defer handler.cleanupWg.Done()
 
@@ -134,17 +168,16 @@ func (handler *namespaceHandler) runElection(ctx context.Context) {
 
 	leaderCh := handler.elector.Run(ctx)
 
-	for {
-		select {
-		case <-ctx.Done():
-			handler.logger.Info("Context cancelled, stopping election")
-			return
-		case isLeader := <-leaderCh:
-			if isLeader {
-				handler.logger.Info("Became leader for namespace")
-			} else {
-				handler.logger.Info("Lost leadership for namespace")
-			}
+	// Use range to drain leaderCh until it's closed.
+	// The channel is closed when the elector goroutine exits (after resign completes).
+	// This ensures we wait for the full resign + cleanup before reporting done.
+	for isLeader := range leaderCh {
+		if isLeader {
+			handler.logger.Info("Became leader for namespace")
+		} else {
+			handler.logger.Info("Lost leadership for namespace")
 		}
 	}
+
+	handler.logger.Info("Election handler stopped for namespace")
 }
