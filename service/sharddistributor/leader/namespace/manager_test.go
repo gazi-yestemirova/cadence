@@ -12,6 +12,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/uber/cadence/common/log/testlogger"
+	"github.com/uber/cadence/service/sharddistributor/client/clientcommon"
 	"github.com/uber/cadence/service/sharddistributor/config"
 	"github.com/uber/cadence/service/sharddistributor/leader/election"
 )
@@ -52,13 +53,7 @@ func TestStartManager(t *testing.T) {
 	electionFactory.EXPECT().CreateElector(gomock.Any(), gomock.Any()).Return(elector, nil)
 
 	leaderCh := make(chan bool)
-	elector.EXPECT().Run(gomock.Any()).DoAndReturn(func(ctx context.Context) <-chan bool {
-		go func() {
-			<-ctx.Done()
-			close(leaderCh)
-		}()
-		return (<-chan bool)(leaderCh)
-	})
+	elector.EXPECT().Run(gomock.Any()).Return((<-chan bool)(leaderCh))
 
 	cfg := config.ShardDistribution{
 		Namespaces: []config.Namespace{
@@ -128,13 +123,7 @@ func TestStopManager(t *testing.T) {
 	electionFactory.EXPECT().CreateElector(gomock.Any(), gomock.Any()).Return(elector, nil)
 
 	leaderCh := make(chan bool)
-	elector.EXPECT().Run(gomock.Any()).DoAndReturn(func(ctx context.Context) <-chan bool {
-		go func() {
-			<-ctx.Done()
-			close(leaderCh)
-		}()
-		return (<-chan bool)(leaderCh)
-	})
+	elector.EXPECT().Run(gomock.Any()).Return((<-chan bool)(leaderCh))
 
 	cfg := config.ShardDistribution{
 		Namespaces: []config.Namespace{
@@ -201,13 +190,7 @@ func TestRunElection(t *testing.T) {
 	electionFactory.EXPECT().CreateElector(gomock.Any(), gomock.Any()).Return(elector, nil)
 
 	leaderCh := make(chan bool)
-	elector.EXPECT().Run(gomock.Any()).DoAndReturn(func(ctx context.Context) <-chan bool {
-		go func() {
-			<-ctx.Done()
-			close(leaderCh)
-		}()
-		return (<-chan bool)(leaderCh)
-	})
+	elector.EXPECT().Run(gomock.Any()).Return((<-chan bool)(leaderCh))
 
 	cfg := config.ShardDistribution{
 		Namespaces: []config.Namespace{
@@ -239,8 +222,130 @@ func TestRunElection(t *testing.T) {
 
 	// Cancel context to end the goroutine
 	manager.cancel()
+	time.Sleep(10 * time.Millisecond) // Give some time for goroutine to exit
+}
 
-	// Wait for cleanup to complete
-	handler := manager.namespaces["test-namespace"]
-	handler.cleanupWg.Wait()
+func TestWatchDrainSignal_DrainSignalTriggersResign(t *testing.T) {
+	logger := testlogger.New(t)
+	ctrl := gomock.NewController(t)
+	electionFactory := election.NewMockFactory(ctrl)
+	elector := election.NewMockElector(ctrl)
+	observer := clientcommon.NewMockDrainSignalObserver(ctrl)
+
+	electionFactory.EXPECT().CreateElector(gomock.Any(), gomock.Any()).Return(elector, nil)
+
+	leaderCh := make(chan bool)
+	elector.EXPECT().Run(gomock.Any()).Return((<-chan bool)(leaderCh))
+
+	shouldStop := make(chan struct{})
+	observer.EXPECT().ShouldStop().Return((<-chan struct{})(shouldStop)).AnyTimes()
+
+	cfg := config.ShardDistribution{
+		Namespaces: []config.Namespace{
+			{Name: "test-namespace"},
+		},
+	}
+
+	manager := &Manager{
+		cfg:             cfg,
+		logger:          logger,
+		electionFactory: electionFactory,
+		drainObserver:   observer,
+		namespaces:      make(map[string]*namespaceHandler),
+	}
+
+	err := manager.Start(context.Background())
+	require.NoError(t, err)
+
+	// Sending drain signal by closing the shouldStop channel
+	close(shouldStop)
+
+	select {
+	case <-manager.ctx.Done():
+		// Success: watchDrainSignal cancelled the manager context
+	case <-time.After(time.Second):
+		t.Fatal("expected manager context to be cancelled after drain signal")
+	}
+
+	time.Sleep(10 * time.Millisecond) // Give some time for goroutine to exit
+}
+
+func TestWatchDrainSignal_NilDrainObserver(t *testing.T) {
+	logger := testlogger.New(t)
+	ctrl := gomock.NewController(t)
+	electionFactory := election.NewMockFactory(ctrl)
+	elector := election.NewMockElector(ctrl)
+
+	electionFactory.EXPECT().CreateElector(gomock.Any(), gomock.Any()).Return(elector, nil)
+
+	leaderCh := make(chan bool)
+	elector.EXPECT().Run(gomock.Any()).Return((<-chan bool)(leaderCh))
+
+	cfg := config.ShardDistribution{
+		Namespaces: []config.Namespace{
+			{Name: "test-namespace"},
+		},
+	}
+
+	manager := &Manager{
+		cfg:             cfg,
+		logger:          logger,
+		electionFactory: electionFactory,
+		namespaces:      make(map[string]*namespaceHandler),
+	}
+
+	err := manager.Start(context.Background())
+	require.NoError(t, err)
+
+	assert.NotNil(t, manager.ctx)
+	assert.NotNil(t, manager.cancel)
+	assert.Nil(t, manager.drainObserver)
+
+	err = manager.Stop(context.Background())
+	assert.NoError(t, err)
+}
+
+func TestWatchDrainSignal_ManagerStopsBeforeDrain(t *testing.T) {
+	logger := testlogger.New(t)
+	ctrl := gomock.NewController(t)
+	electionFactory := election.NewMockFactory(ctrl)
+	elector := election.NewMockElector(ctrl)
+	observer := clientcommon.NewMockDrainSignalObserver(ctrl)
+
+	electionFactory.EXPECT().CreateElector(gomock.Any(), gomock.Any()).Return(elector, nil)
+
+	leaderCh := make(chan bool)
+	elector.EXPECT().Run(gomock.Any()).Return((<-chan bool)(leaderCh))
+
+	// shouldStop channel is never closed - drain never fires
+	shouldStop := make(chan struct{})
+	observer.EXPECT().ShouldStop().Return((<-chan struct{})(shouldStop)).AnyTimes()
+
+	cfg := config.ShardDistribution{
+		Namespaces: []config.Namespace{
+			{Name: "test-namespace"},
+		},
+	}
+
+	manager := &Manager{
+		cfg:             cfg,
+		logger:          logger,
+		electionFactory: electionFactory,
+		drainObserver:   observer,
+		namespaces:      make(map[string]*namespaceHandler),
+	}
+
+	err := manager.Start(context.Background())
+	require.NoError(t, err)
+
+	// Stop the manager before drain fires
+	err = manager.Stop(context.Background())
+	assert.NoError(t, err)
+
+	select {
+	case <-manager.ctx.Done():
+		// Success
+	case <-time.After(time.Second):
+		t.Fatal("expected manager context to be cancelled after Stop()")
+	}
 }

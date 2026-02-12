@@ -9,6 +9,7 @@ import (
 
 	"github.com/uber/cadence/common/log"
 	"github.com/uber/cadence/common/log/tag"
+	"github.com/uber/cadence/service/sharddistributor/client/clientcommon"
 	"github.com/uber/cadence/service/sharddistributor/config"
 	"github.com/uber/cadence/service/sharddistributor/leader/election"
 )
@@ -23,6 +24,7 @@ type Manager struct {
 	cfg             config.ShardDistribution
 	logger          log.Logger
 	electionFactory election.Factory
+	drainObserver   clientcommon.DrainSignalObserver
 	namespaces      map[string]*namespaceHandler
 	ctx             context.Context
 	cancel          context.CancelFunc
@@ -43,6 +45,7 @@ type ManagerParams struct {
 	Logger          log.Logger
 	ElectionFactory election.Factory
 	Lifecycle       fx.Lifecycle
+	DrainObserver   clientcommon.DrainSignalObserver `optional:"true"`
 }
 
 // NewManager creates a new namespace manager
@@ -51,6 +54,7 @@ func NewManager(p ManagerParams) *Manager {
 		cfg:             p.Cfg,
 		logger:          p.Logger.WithTags(tag.ComponentNamespaceManager),
 		electionFactory: p.ElectionFactory,
+		drainObserver:   p.DrainObserver,
 		namespaces:      make(map[string]*namespaceHandler),
 	}
 
@@ -70,25 +74,35 @@ func (m *Manager) Start(ctx context.Context) error {
 		}
 	}
 
+	if m.drainObserver != nil {
+		go m.watchDrainSignal()
+	}
+
 	return nil
 }
 
-// Stop gracefully stops all namespace handlers.
-// When SIGTERM is received (e.g., during UDG zone drain), this method:
-// 1. Cancels all election contexts to trigger resign from etcd leadership
-// 2. Waits for all electors to fully resign (including etcd cleanup)
-// This ensures the etcd leadership key is released immediately, allowing
-// instances in other zones to campaign and win without waiting for session TTL expiry.
+// watchDrainSignal watches for external drain signals
+// and cancels the manager's context to trigger resignation from all leader elections.
+func (m *Manager) watchDrainSignal() {
+	select {
+	case <-m.drainObserver.ShouldStop():
+		m.logger.Info("DrainSignalObserver: instance removed from discovery, resigning leadership")
+		m.cancel()
+	case <-m.ctx.Done():
+		// Manager stopped normally
+	}
+}
+
+// Stop gracefully stops all namespace handlers
 func (m *Manager) Stop(ctx context.Context) error {
 	if m.cancel == nil {
 		return fmt.Errorf("manager was not running")
 	}
 
-	m.logger.Info("ShutdownHandler: Resigning from all leader elections")
 	m.cancel()
 
 	for ns, handler := range m.namespaces {
-		m.logger.Info("ShutdownHandler: Waiting for election handler to stop", tag.ShardNamespace(ns))
+		m.logger.Info("Stopping namespace handler", tag.ShardNamespace(ns))
 		if handler.cancel != nil {
 			handler.cancel()
 		}
@@ -132,11 +146,7 @@ func (m *Manager) handleNamespace(namespaceCfg config.Namespace) error {
 	return nil
 }
 
-// runElection manages the leadership election for a namespace.
-// It waits for the leaderCh to be closed (which happens after the elector goroutine
-// fully completes, including etcd resign and session cleanup). This ensures that
-// when the context is cancelled (e.g., during UDG zone drain), the elector's resign
-// operation completes before we report the handler as stopped.
+// runElection manages the leadership election for a namespace
 func (handler *namespaceHandler) runElection(ctx context.Context) {
 	defer handler.cleanupWg.Done()
 
@@ -144,16 +154,17 @@ func (handler *namespaceHandler) runElection(ctx context.Context) {
 
 	leaderCh := handler.elector.Run(ctx)
 
-	// Use range to drain leaderCh until it's closed.
-	// The channel is closed when the elector goroutine exits (after resign completes).
-	// This ensures we wait for the full resign + cleanup before reporting done.
-	for isLeader := range leaderCh {
-		if isLeader {
-			handler.logger.Info("Became leader for namespace")
-		} else {
-			handler.logger.Info("Lost leadership for namespace")
+	for {
+		select {
+		case <-ctx.Done():
+			handler.logger.Info("Context cancelled, stopping election")
+			return
+		case isLeader := <-leaderCh:
+			if isLeader {
+				handler.logger.Info("Became leader for namespace")
+			} else {
+				handler.logger.Info("Lost leadership for namespace")
+			}
 		}
 	}
-
-	handler.logger.Info("Election handler stopped for namespace")
 }
