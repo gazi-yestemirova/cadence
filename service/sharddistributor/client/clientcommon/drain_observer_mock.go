@@ -39,16 +39,30 @@ func (m *MockDrainSignalObserver) EXPECT() *MockDrainSignalObserverMockRecorder 
 	return m.recorder
 }
 
-// ShouldStop mocks base method.
-func (m *MockDrainSignalObserver) ShouldStop() <-chan struct{} {
+// Drain mocks base method.
+func (m *MockDrainSignalObserver) Drain() <-chan struct{} {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ShouldStop")
+	ret := m.ctrl.Call(m, "Drain")
 	ret0, _ := ret[0].(<-chan struct{})
 	return ret0
 }
 
-// ShouldStop indicates an expected call of ShouldStop.
-func (mr *MockDrainSignalObserverMockRecorder) ShouldStop() *gomock.Call {
+// Drain indicates an expected call of Drain.
+func (mr *MockDrainSignalObserverMockRecorder) Drain() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ShouldStop", reflect.TypeOf((*MockDrainSignalObserver)(nil).ShouldStop))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Drain", reflect.TypeOf((*MockDrainSignalObserver)(nil).Drain))
+}
+
+// Undrain mocks base method.
+func (m *MockDrainSignalObserver) Undrain() <-chan struct{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Undrain")
+	ret0, _ := ret[0].(<-chan struct{})
+	return ret0
+}
+
+// Undrain indicates an expected call of Undrain.
+func (mr *MockDrainSignalObserverMockRecorder) Undrain() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Undrain", reflect.TypeOf((*MockDrainSignalObserver)(nil).Undrain))
 }
