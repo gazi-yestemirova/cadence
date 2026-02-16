@@ -20,14 +20,10 @@ var Module = fx.Module(
 	fx.Invoke(NewManager),
 )
 
-// electionState represents the state of the election state machine.
-type electionState int
-
-const (
-	stateActive electionState = iota
-	stateIdle
-	stateStop
-)
+// stateFn represents a state in the election state machine.
+// Each state is a function that blocks until a transition occurs
+// and returns the next state function, or nil to stop.
+type stateFn func(ctx context.Context) stateFn
 
 type Manager struct {
 	cfg             config.ShardDistribution
@@ -125,42 +121,32 @@ func (m *Manager) handleNamespace(namespaceCfg config.Namespace) error {
 	return nil
 }
 
-// runElection is the election state machine for a namespace.
-// It toggles between campaign (active) and idle (drained) states
-// until the context is cancelled (stateStop).
+// runElection drives the election state machine for a namespace.
+// It starts in the campaigning state and follows state transitions
+// until a state returns nil (stop).
 func (h *namespaceHandler) runElection(ctx context.Context) {
 	defer h.cleanupWg.Done()
 
-	state := stateActive
-	for {
-		switch state {
-		case stateActive:
-			state = h.campaign(ctx)
-		case stateIdle:
-			state = h.idle(ctx)
-		case stateStop:
-			return
-		}
+	for state := h.campaigning; state != nil; {
+		state = state(ctx)
 	}
 }
 
-// campaign creates an elector and processes leadership events.
-// Returns stateIdle if drained, stateActive to retry on error, or stateStop.
-func (h *namespaceHandler) campaign(ctx context.Context) electionState {
-	h.logger.Info("Entering active campaign state")
+// campaigning creates an elector and participates in leader election.
+// Transitions: h.idle on drain, h.campaigning on recoverable error, nil on stop.
+func (h *namespaceHandler) campaigning(ctx context.Context) stateFn {
+	h.logger.Info("Entering campaigning state")
 
-	// Snapshot the current drain channel. The observer uses close-to-broadcast,
-	// so if a drain already happened, this channel is closed and fires immediately.
 	var drainCh <-chan struct{}
 	if h.drainObserver != nil {
 		drainCh = h.drainObserver.Drain()
 	}
 
-	// check if already drained before creating an elector
+	// Check if already drained before creating an elector.
 	select {
 	case <-drainCh:
-		h.logger.Info("Drain signal detected before campaign start")
-		return stateIdle
+		h.logger.Info("Drain signal detected before election start")
+		return h.idle
 	default:
 	}
 
@@ -170,7 +156,7 @@ func (h *namespaceHandler) campaign(ctx context.Context) electionState {
 	elector, err := h.electionFactory.CreateElector(electorCtx, h.namespaceCfg)
 	if err != nil {
 		h.logger.Error("Failed to create elector", tag.Error(err))
-		return stateStop
+		return nil
 	}
 
 	leaderCh := elector.Run(electorCtx)
@@ -178,14 +164,14 @@ func (h *namespaceHandler) campaign(ctx context.Context) electionState {
 	for {
 		select {
 		case <-ctx.Done():
-			return stateStop
+			return nil
 		case <-drainCh:
 			h.logger.Info("Drain signal received, resigning from election")
-			return stateIdle
+			return h.idle
 		case isLeader, ok := <-leaderCh:
 			if !ok {
 				h.logger.Error("Election channel closed unexpectedly")
-				return stateActive
+				return h.campaigning
 			}
 			if isLeader {
 				h.logger.Info("Became leader for namespace")
@@ -197,12 +183,10 @@ func (h *namespaceHandler) campaign(ctx context.Context) electionState {
 }
 
 // idle waits for an undrain signal to resume campaigning.
-// Returns stateActive when undrained, or stateStop.
-func (h *namespaceHandler) idle(ctx context.Context) electionState {
+// Transitions: h.campaigning on undrain, nil on stop.
+func (h *namespaceHandler) idle(ctx context.Context) stateFn {
 	h.logger.Info("Entering idle state (drained)")
 
-	// Snapshot the current undrain channel. The observer uses close-to-broadcast,
-	// so if an undrain already happened, this channel is closed and fires immediately.
 	var undrainCh <-chan struct{}
 	if h.drainObserver != nil {
 		undrainCh = h.drainObserver.Undrain()
@@ -210,9 +194,9 @@ func (h *namespaceHandler) idle(ctx context.Context) electionState {
 
 	select {
 	case <-ctx.Done():
-		return stateStop
+		return nil
 	case <-undrainCh:
-		h.logger.Info("Undrain signal received, resuming campaign")
-		return stateActive
+		h.logger.Info("Undrain signal received, resuming election")
+		return h.campaigning
 	}
 }
