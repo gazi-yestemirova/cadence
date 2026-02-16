@@ -73,7 +73,8 @@ type Params[SP ShardProcessor] struct {
 	ShardProcessorFactory ShardProcessorFactory[SP]
 	Config                clientcommon.Config
 	TimeSource            clock.TimeSource
-	Metadata              ExecutorMetadata `optional:"true"`
+	Metadata              ExecutorMetadata                  `optional:"true"`
+	DrainObserver         clientcommon.DrainSignalObserver   `optional:"true"`
 }
 
 // NewExecutorWithNamespace creates an executor for a specific namespace
@@ -136,6 +137,7 @@ func newExecutorWithConfig[SP ShardProcessor](params Params[SP], namespaceConfig
 		metadata: syncExecutorMetadata{
 			data: params.Metadata,
 		},
+		drainObserver: params.DrainObserver,
 	}
 	executor.setMigrationMode(namespaceConfig.GetMigrationMode())
 
