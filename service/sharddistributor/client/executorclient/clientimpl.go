@@ -23,6 +23,10 @@ import (
 var (
 	// ErrLocalPassthroughMode indicates that the heartbeat loop should stop due to local passthrough mode
 	ErrLocalPassthroughMode = errors.New("local passthrough mode: stopping heartbeat loop")
+	// ErrAssignmentDivergenceLocalShard indicates that the local shard is not reported back from the heartbeat
+	ErrAssignmentDivergenceLocalShard = errors.New("assignment divergence: local shard not in heartbeat or not ready")
+	// ErrAssignmentDivergenceHeartbeatShard indicates that the shard in the heartbeat is not present in the local assignment
+	ErrAssignmentDivergenceHeartbeatShard = errors.New("assignment divergence: heartbeat shard not in local")
 )
 
 type processorState int32
@@ -134,10 +138,10 @@ func (e *executorImpl[SP]) Stop() {
 }
 
 func (e *executorImpl[SP]) GetShardProcess(ctx context.Context, shardID string) (SP, error) {
-	shardProcess, ok := e.managedProcessors.Load(shardID)
 	e.processorsToLastUse.Store(shardID, e.timeSource.Now())
-	if !ok {
 
+	shardProcess, ok := e.managedProcessors.Load(shardID)
+	if !ok {
 		if e.getMigrationMode() == types.MigrationModeLOCALPASSTHROUGH {
 			// Fail immediately if we are in LOCAL_PASSTHROUGH mode
 			var zero SP
@@ -158,6 +162,7 @@ func (e *executorImpl[SP]) GetShardProcess(ctx context.Context, shardID string) 
 			return zero, fmt.Errorf("shard process not found for shard ID: %s", shardID)
 		}
 	}
+
 	return shardProcess.processor, nil
 }
 
@@ -261,12 +266,15 @@ func (e *executorImpl[SP]) heartbeatAndHandleMigrationMode(ctx context.Context) 
 
 	case types.MigrationModeLOCALPASSTHROUGHSHADOW:
 		// LOCAL_PASSTHROUGH_SHADOW: check response but don't apply it
-		e.compareAssignments(shardAssignment)
-		return nil, nil
+		err = e.compareAssignments(shardAssignment)
+		return nil, err
 
 	case types.MigrationModeDISTRIBUTEDPASSTHROUGH:
 		// DISTRIBUTED_PASSTHROUGH: validate then apply the assignment
-		e.compareAssignments(shardAssignment)
+		err = e.compareAssignments(shardAssignment)
+		if err != nil {
+			return nil, err
+		}
 		return shardAssignment, nil
 		// Continue with applying the assignment from heartbeat
 
@@ -456,6 +464,7 @@ func (e *executorImpl[SP]) stopManagerProcessor(shardID string) {
 func (e *executorImpl[SP]) shardCleanUpLoop(ctx context.Context) {
 	// We don't run the loop for invalid durations
 	if e.ttlShard <= 0 {
+
 		return
 	}
 	shardCleanUpTimer := e.timeSource.NewTimer(backoff.JitDuration(e.ttlShard, heartbeatJitterCoeff))
@@ -470,7 +479,14 @@ func (e *executorImpl[SP]) shardCleanUpLoop(ctx context.Context) {
 		case <-shardCleanUpTimer.Chan():
 			e.processorsToLastUse.Range(func(shardID string, time time.Time) bool {
 				if time.Add(e.ttlShard).Before(e.timeSource.Now()) {
-					e.deleteShards([]string{shardID})
+					if e.getMigrationMode() == types.MigrationModeONBOARDED {
+						mp, ok := e.managedProcessors.Load(shardID)
+						if ok {
+							mp.processor.SetShardStatus(types.ShardStatusDONE)
+						}
+					} else {
+						e.deleteShards([]string{shardID})
+					}
 					e.processorsToLastUse.Delete(shardID)
 				}
 				return true
@@ -480,8 +496,8 @@ func (e *executorImpl[SP]) shardCleanUpLoop(ctx context.Context) {
 }
 
 // compareAssignments compares the local assignments with the heartbeat response assignments
-// and emits convergence or divergence metrics
-func (e *executorImpl[SP]) compareAssignments(heartbeatAssignments map[string]*types.ShardAssignment) {
+// return error if the assignment are not the same and emits convergence or divergence metrics
+func (e *executorImpl[SP]) compareAssignments(heartbeatAssignments map[string]*types.ShardAssignment) error {
 	// Get current local assignments
 	localAssignments := make(map[string]bool)
 	e.managedProcessors.Range(func(shardID string, managedProcessor *managedProcessor[SP]) bool {
@@ -498,7 +514,7 @@ func (e *executorImpl[SP]) compareAssignments(heartbeatAssignments map[string]*t
 			e.logger.Warn("assignment divergence: local shard not in heartbeat or not ready",
 				tag.Dynamic("shard-id", shardID))
 			e.emitMetricsConvergence(false)
-			return
+			return ErrAssignmentDivergenceLocalShard
 		}
 	}
 
@@ -509,12 +525,13 @@ func (e *executorImpl[SP]) compareAssignments(heartbeatAssignments map[string]*t
 				e.logger.Warn("assignment divergence: heartbeat shard not in local",
 					tag.Dynamic("shard-id", shardID))
 				e.emitMetricsConvergence(false)
-				return
+				return ErrAssignmentDivergenceHeartbeatShard
 			}
 		}
 	}
 
 	e.emitMetricsConvergence(true)
+	return nil
 }
 
 func (e *executorImpl[SP]) emitMetricsConvergence(converged bool) {
