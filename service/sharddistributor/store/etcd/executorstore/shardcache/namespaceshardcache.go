@@ -174,6 +174,9 @@ func (n *namespaceShardToExecutor) watch(triggerCh chan<- struct{}) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	scope := n.metricsClient.Scope(metrics.ShardDistributorWatchScope).
+		Tagged(metrics.NamespaceTag(n.namespace))
+
 	watchChan := n.client.Watch(
 		// WithRequireLeader ensures that the etcd cluster has a leader
 		clientv3.WithRequireLeader(ctx),
@@ -181,6 +184,8 @@ func (n *namespaceShardToExecutor) watch(triggerCh chan<- struct{}) error {
 		clientv3.WithPrefix(),
 		clientv3.WithPrevKV(),
 	)
+
+	var lastProcessedRevision int64
 
 	for {
 		select {
@@ -196,8 +201,17 @@ func (n *namespaceShardToExecutor) watch(triggerCh chan<- struct{}) error {
 				return fmt.Errorf("watch channel closed")
 			}
 
+			// Track watch metrics
+			sw := scope.StartTimer(metrics.ShardDistributorWatchProcessingLatency)
+			scope.AddCounter(metrics.ShardDistributorWatchEventsReceived, int64(len(watchResp.Events)))
+			if lastProcessedRevision > 0 {
+				scope.UpdateGauge(metrics.ShardDistributorWatchConsumerLag, float64(watchResp.Header.Revision-lastProcessedRevision))
+			}
+			lastProcessedRevision = watchResp.Header.Revision
+
 			// Only trigger refresh if the change is related to executor assigned state or metadata
 			if !n.hasExecutorStateChanged(watchResp) {
+				sw.Stop()
 				continue
 			}
 
@@ -206,6 +220,7 @@ func (n *namespaceShardToExecutor) watch(triggerCh chan<- struct{}) error {
 			default:
 				n.logger.Info("Cache is being refreshed, skipping trigger")
 			}
+			sw.Stop()
 		}
 	}
 }

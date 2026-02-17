@@ -279,18 +279,33 @@ func (s *executorStoreImpl) SubscribeToExecutorStatusChanges(ctx context.Context
 
 	go func() {
 		defer close(revisionChan)
+
+		scope := s.metricsClient.Scope(metrics.ShardDistributorWatchScope).
+			Tagged(metrics.NamespaceTag(namespace))
+
 		watchChan := s.client.Watch(ctx,
 			etcdkeys.BuildExecutorsPrefix(s.prefix, namespace),
 			clientv3.WithPrefix(),
 			clientv3.WithPrevKV(),
 		)
 
+		var lastProcessedRevision int64
+
 		for watchResp := range watchChan {
 			if err := watchResp.Err(); err != nil {
 				return
 			}
 
+			// Track watch metrics
+			sw := scope.StartTimer(metrics.ShardDistributorWatchProcessingLatency)
+			scope.AddCounter(metrics.ShardDistributorWatchEventsReceived, int64(len(watchResp.Events)))
+			if lastProcessedRevision > 0 {
+				scope.UpdateGauge(metrics.ShardDistributorWatchConsumerLag, float64(watchResp.Header.Revision-lastProcessedRevision))
+			}
+			lastProcessedRevision = watchResp.Header.Revision
+
 			if !s.hasExecutorStatusChanged(watchResp, namespace) {
+				sw.Stop()
 				continue
 			}
 
@@ -302,6 +317,7 @@ func (s *executorStoreImpl) SubscribeToExecutorStatusChanges(ctx context.Context
 			}
 
 			revisionChan <- watchResp.Header.Revision
+			sw.Stop()
 		}
 	}()
 
