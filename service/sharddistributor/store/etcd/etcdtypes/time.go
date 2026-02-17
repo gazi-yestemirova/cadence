@@ -39,10 +39,16 @@ func (t Time) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements the json.Unmarshaler interface.
 // It decodes the time from time.RFC3339Nano format.
+// It also handles the special case where the value is "0" or 0 (zero),
+// which is treated as the zero value of time.Time.
 func (t *Time) UnmarshalJSON(data []byte) error {
 	str := string(data)
 	if len(str) >= 2 && str[0] == '"' && str[len(str)-1] == '"' {
 		str = str[1 : len(str)-1]
+	}
+	if str == "0" {
+		*t = Time(time.Time{})
+		return nil
 	}
 	parsed, err := ParseTime(str)
 	if err != nil {

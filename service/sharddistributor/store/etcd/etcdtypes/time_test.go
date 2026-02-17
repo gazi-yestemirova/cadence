@@ -89,6 +89,16 @@ func TestTimeUnmarshalJSON(t *testing.T) {
 			expectTime: Time(time.Date(2025, 11, 17, 23, 2, 3, 456789012, time.UTC)),
 			expectErr:  "",
 		},
+		"zero string": {
+			input:      []byte(`"0"`),
+			expectTime: Time(time.Time{}),
+			expectErr:  "",
+		},
+		"zero number": {
+			input:      []byte(`0`),
+			expectTime: Time(time.Time{}),
+			expectErr:  "",
+		},
 		"invalid format": {
 			input:      []byte(`"not-a-time"`),
 			expectTime: Time{},

@@ -223,6 +223,29 @@ func TestAssignedState_JSONMarshalling(t *testing.T) {
 	}
 }
 
+func TestAssignedState_JSONUnmarshalWithZeroLastUpdated(t *testing.T) {
+	tests := map[string]struct {
+		jsonStr string
+	}{
+		"last_updated is string zero": {
+			jsonStr: `{"assigned_shards":{"1":{"status":"AssignmentStatusREADY"}},"last_updated":"0"}`,
+		},
+		"last_updated is numeric zero": {
+			jsonStr: `{"assigned_shards":{"1":{"status":"AssignmentStatusREADY"}},"last_updated":0}`,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			var unmarshalled AssignedState
+			err := json.Unmarshal([]byte(tc.jsonStr), &unmarshalled)
+			require.NoError(t, err)
+			require.Equal(t, types.AssignmentStatusREADY, unmarshalled.AssignedShards["1"].Status)
+			require.True(t, time.Time(unmarshalled.LastUpdated).IsZero())
+		})
+	}
+}
+
 func TestShardStatistics_FieldNumberMatched(t *testing.T) {
 	require.Equal(t,
 		reflect.TypeOf(ShardStatistics{}).NumField(),
