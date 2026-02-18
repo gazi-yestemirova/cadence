@@ -20,9 +20,10 @@ var Module = fx.Module(
 	fx.Invoke(NewManager),
 )
 
-// stateFn represents a state in the election state machine.
-// Each state is a function that blocks until a transition occurs
-// and returns the next state function, or nil to stop.
+// stateFn is a recursive function type representing a state in the election
+// state machine.
+// Each state function blocks until a transition occurs and returns the next state function,
+// or nil to stop the machine.
 type stateFn func(ctx context.Context) stateFn
 
 type Manager struct {
@@ -132,17 +133,30 @@ func (h *namespaceHandler) runElection(ctx context.Context) {
 	}
 }
 
+func (h *namespaceHandler) drainChannel() <-chan struct{} {
+	if h.drainObserver != nil {
+		return h.drainObserver.Drain()
+	}
+	return nil
+}
+
+func (h *namespaceHandler) startElection(ctx context.Context) (<-chan bool, context.CancelFunc, error) {
+	electorCtx, cancel := context.WithCancel(ctx)
+	elector, err := h.electionFactory.CreateElector(electorCtx, h.namespaceCfg)
+	if err != nil {
+		cancel()
+		return nil, nil, err
+	}
+	return elector.Run(electorCtx), cancel, nil
+}
+
 // campaigning creates an elector and participates in leader election.
 // Transitions: h.idle on drain, h.campaigning on recoverable error, nil on stop.
 func (h *namespaceHandler) campaigning(ctx context.Context) stateFn {
 	h.logger.Info("Entering campaigning state")
 
-	var drainCh <-chan struct{}
-	if h.drainObserver != nil {
-		drainCh = h.drainObserver.Drain()
-	}
+	drainCh := h.drainChannel()
 
-	// Check if already drained before creating an elector.
 	select {
 	case <-drainCh:
 		h.logger.Info("Drain signal detected before election start")
@@ -150,16 +164,12 @@ func (h *namespaceHandler) campaigning(ctx context.Context) stateFn {
 	default:
 	}
 
-	electorCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	elector, err := h.electionFactory.CreateElector(electorCtx, h.namespaceCfg)
+	leaderCh, cancel, err := h.startElection(ctx)
 	if err != nil {
 		h.logger.Error("Failed to create elector", tag.Error(err))
 		return nil
 	}
-
-	leaderCh := elector.Run(electorCtx)
+	defer cancel()
 
 	for {
 		select {
