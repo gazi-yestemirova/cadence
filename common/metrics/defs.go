@@ -3004,8 +3004,6 @@ const (
 	// ShardDistributorShardHandoverLatency measures the time taken to hand over a shard from one executor to another
 	ShardDistributorShardHandoverLatency
 
-	// ShardDistributorWatchConsumerLag measures the lag between latest etcd revision and last processed revision
-	ShardDistributorWatchConsumerLag
 	// ShardDistributorWatchProcessingLatency measures how long it takes to process a single WatchResponse
 	ShardDistributorWatchProcessingLatency
 	// ShardDistributorWatchEventsReceived counts the total number of watch events received
@@ -3814,7 +3812,6 @@ var MetricDefs = map[ServiceIdx]map[MetricIdx]metricDefinition{
 		ShardDistributorShardAssignmentDistributionLatency: {metricName: "shard_distributor_shard_assignment_distribution_latency", metricType: Histogram, buckets: ShardDistributorShardAssignmentLatencyBuckets},
 		ShardDistributorShardHandoverLatency:               {metricName: "shard_distributor_shard_handover_latency", metricType: Histogram, buckets: ShardDistributorShardAssignmentLatencyBuckets},
 
-		ShardDistributorWatchConsumerLag:       {metricName: "shard_distributor_watch_consumer_lag", metricType: Gauge},
 		ShardDistributorWatchProcessingLatency: {metricName: "shard_distributor_watch_processing_latency", metricType: Histogram, buckets: Default1ms100s.buckets()},
 		ShardDistributorWatchEventsReceived:    {metricName: "shard_distributor_watch_events_received", metricType: Counter},
 	},
