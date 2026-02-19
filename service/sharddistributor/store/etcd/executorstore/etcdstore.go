@@ -281,7 +281,8 @@ func (s *executorStoreImpl) SubscribeToExecutorStatusChanges(ctx context.Context
 		defer close(revisionChan)
 
 		scope := s.metricsClient.Scope(metrics.ShardDistributorWatchScope).
-			Tagged(metrics.NamespaceTag(namespace))
+			Tagged(metrics.NamespaceTag(namespace)).
+			Tagged(metrics.ShardDistributorWatchTypeTag("rebalance"))
 
 		watchChan := s.client.Watch(ctx,
 			etcdkeys.BuildExecutorsPrefix(s.prefix, namespace),
@@ -297,14 +298,6 @@ func (s *executorStoreImpl) SubscribeToExecutorStatusChanges(ctx context.Context
 			// Track watch metrics
 			sw := scope.StartTimer(metrics.ShardDistributorWatchProcessingLatency)
 			scope.AddCounter(metrics.ShardDistributorWatchEventsReceived, int64(len(watchResp.Events)))
-
-			// Consumer lag: Header.Revision is the current etcd cluster revision,
-			// lastEvent.Kv.ModRevision is the revision when the event was created.
-			// The difference shows how far behind the consumer is from the current cluster state.
-			if len(watchResp.Events) > 0 {
-				lastEvent := watchResp.Events[len(watchResp.Events)-1]
-				scope.UpdateGauge(metrics.ShardDistributorWatchConsumerLag, float64(watchResp.Header.Revision-lastEvent.Kv.ModRevision))
-			}
 
 			if !s.hasExecutorStatusChanged(watchResp, namespace) {
 				sw.Stop()

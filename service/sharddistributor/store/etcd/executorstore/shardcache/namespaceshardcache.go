@@ -175,7 +175,8 @@ func (n *namespaceShardToExecutor) watch(triggerCh chan<- struct{}) error {
 	defer cancel()
 
 	scope := n.metricsClient.Scope(metrics.ShardDistributorWatchScope).
-		Tagged(metrics.NamespaceTag(n.namespace))
+		Tagged(metrics.NamespaceTag(n.namespace)).
+		Tagged(metrics.ShardDistributorWatchTypeTag("cache_refresh"))
 
 	watchChan := n.client.Watch(
 		// WithRequireLeader ensures that the etcd cluster has a leader
@@ -202,14 +203,6 @@ func (n *namespaceShardToExecutor) watch(triggerCh chan<- struct{}) error {
 			// Track watch metrics
 			sw := scope.StartTimer(metrics.ShardDistributorWatchProcessingLatency)
 			scope.AddCounter(metrics.ShardDistributorWatchEventsReceived, int64(len(watchResp.Events)))
-
-			// Consumer lag: Header.Revision is the current etcd cluster revision,
-			// lastEvent.Kv.ModRevision is the revision when the event was created.
-			// The difference shows how far behind the consumer is from the current cluster state.
-			if len(watchResp.Events) > 0 {
-				lastEvent := watchResp.Events[len(watchResp.Events)-1]
-				scope.UpdateGauge(metrics.ShardDistributorWatchConsumerLag, float64(watchResp.Header.Revision-lastEvent.Kv.ModRevision))
-			}
 
 			// Only trigger refresh if the change is related to executor assigned state or metadata
 			if !n.hasExecutorStateChanged(watchResp) {
