@@ -24,6 +24,14 @@ import (
 	"github.com/uber/cadence/service/sharddistributor/store/etcd/executorstore/shardcache"
 )
 
+const (
+	// etcd enforces a hard limit of 128 operations per transaction.
+	// The guard function uses 1 If comparison slot for the leadership check, leaving 127 for actual operations.
+	maxEtcdTxnOps     = 128
+	guardOpOverhead   = 1
+	maxOpsPerGuardTxn = maxEtcdTxnOps - guardOpOverhead
+)
+
 var (
 	_executorStatusRunningJSON = fmt.Sprintf(`"%s"`, types.ExecutorStatusACTIVE)
 )
@@ -606,74 +614,66 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 	}
 }
 
+// commitGuardedOps commits the given operations in batches to stay within etcd's per-transaction operation limit.
+// Each batch creates a new guarded transaction. If any batch fails, the function returns immediately
+// with the error; already-committed batches are not rolled back. Callers must tolerate partial progress.
+func (s *executorStoreImpl) commitGuardedOps(ctx context.Context, ops []clientv3.Op, guard store.GuardFunc) error {
+	for i := 0; i < len(ops); i += maxOpsPerGuardTxn {
+		end := i + maxOpsPerGuardTxn
+		if end > len(ops) {
+			end = len(ops)
+		}
+
+		nativeTxn := s.client.Txn(ctx)
+		guardedTxn, err := guard(nativeTxn)
+		if err != nil {
+			return fmt.Errorf("apply transaction guard: %w", err)
+		}
+		etcdGuardedTxn, ok := guardedTxn.(clientv3.Txn)
+		if !ok {
+			return fmt.Errorf("guard function returned invalid transaction type")
+		}
+
+		etcdGuardedTxn = etcdGuardedTxn.Then(ops[i:end]...)
+		resp, err := etcdGuardedTxn.Commit()
+		if err != nil {
+			return fmt.Errorf("commit batch: %w", err)
+		}
+		if !resp.Succeeded {
+			return fmt.Errorf("transaction failed, leadership may have changed")
+		}
+	}
+	return nil
+}
+
 // DeleteExecutors deletes the given executors from the store. It does not delete the shards owned by the executors, this
 // should be handled by the namespace processor loop as we want to reassign, not delete the shards.
 func (s *executorStoreImpl) DeleteExecutors(ctx context.Context, namespace string, executorIDs []string, guard store.GuardFunc) error {
 	if len(executorIDs) == 0 {
 		return nil
 	}
-	var ops []clientv3.Op
+	ops := make([]clientv3.Op, 0, len(executorIDs))
 
 	for _, executorID := range executorIDs {
 		executorIDPrefix := etcdkeys.BuildExecutorIDPrefix(s.prefix, namespace, executorID)
 		ops = append(ops, clientv3.OpDelete(executorIDPrefix, clientv3.WithPrefix()))
 	}
 
-	if len(ops) == 0 {
-		return nil
-	}
-
-	nativeTxn := s.client.Txn(ctx)
-	guardedTxn, err := guard(nativeTxn)
-	if err != nil {
-		return fmt.Errorf("apply transaction guard: %w", err)
-	}
-	etcdGuardedTxn, ok := guardedTxn.(clientv3.Txn)
-	if !ok {
-		return fmt.Errorf("guard function returned invalid transaction type")
-	}
-
-	etcdGuardedTxn = etcdGuardedTxn.Then(ops...)
-	resp, err := etcdGuardedTxn.Commit()
-	if err != nil {
-		return fmt.Errorf("commit executor deletion: %w", err)
-	}
-	if !resp.Succeeded {
-		return fmt.Errorf("transaction failed, leadership may have changed")
-	}
-	return nil
+	return s.commitGuardedOps(ctx, ops, guard)
 }
 
 func (s *executorStoreImpl) DeleteAssignedStates(ctx context.Context, namespace string, executorIDs []string, guard store.GuardFunc) error {
 	if len(executorIDs) == 0 {
 		return nil
 	}
-	var ops []clientv3.Op
+	ops := make([]clientv3.Op, 0, len(executorIDs))
 
 	for _, executorID := range executorIDs {
 		executorIDPrefix := etcdkeys.BuildExecutorKey(s.prefix, namespace, executorID, etcdkeys.ExecutorAssignedStateKey)
 		ops = append(ops, clientv3.OpDelete(executorIDPrefix, clientv3.WithPrefix()))
 	}
 
-	nativeTxn := s.client.Txn(ctx)
-	guardedTxn, err := guard(nativeTxn)
-	if err != nil {
-		return fmt.Errorf("apply transaction guard: %w", err)
-	}
-	etcdGuardedTxn, ok := guardedTxn.(clientv3.Txn)
-	if !ok {
-		return fmt.Errorf("guard function returned invalid transaction type")
-	}
-
-	etcdGuardedTxn = etcdGuardedTxn.Then(ops...)
-	resp, err := etcdGuardedTxn.Commit()
-	if err != nil {
-		return fmt.Errorf("commit executor deletion: %w", err)
-	}
-	if !resp.Succeeded {
-		return fmt.Errorf("transaction failed, leadership may have changed")
-	}
-	return nil
+	return s.commitGuardedOps(ctx, ops, guard)
 }
 
 // DeleteShardStats deletes shard statistics for the given shard IDs.
@@ -760,27 +760,7 @@ func (s *executorStoreImpl) DeleteShardStats(ctx context.Context, namespace stri
 		ops = append(ops, clientv3.OpPut(statsKey, string(compressedPayload)))
 	}
 
-	nativeTxn := s.client.Txn(ctx)
-	guardedTxn, err := guard(nativeTxn)
-	if err != nil {
-		return fmt.Errorf("apply transaction guard: %w", err)
-	}
-
-	etcdGuardedTxn, ok := guardedTxn.(clientv3.Txn)
-	if !ok {
-		return fmt.Errorf("guard function returned invalid transaction type")
-	}
-
-	etcdGuardedTxn = etcdGuardedTxn.Then(ops...)
-	txnResp, err := etcdGuardedTxn.Commit()
-	if err != nil {
-		return fmt.Errorf("commit shard statistics deletion: %w", err)
-	}
-	if !txnResp.Succeeded {
-		return fmt.Errorf("transaction failed, leadership may have changed")
-	}
-
-	return nil
+	return s.commitGuardedOps(ctx, ops, guard)
 }
 
 func (s *executorStoreImpl) GetShardOwner(ctx context.Context, namespace, shardID string) (*store.ShardOwner, error) {
