@@ -199,20 +199,37 @@ func (e *executorImpl[SP]) removeShards(shardIDs []string) error {
 	return nil
 }
 
+// heartbeatStateFn is a recursive function type representing a state in the
+// executor heartbeat state machine (inspired by Rob Pike's lexer pattern).
+// Each state function blocks until a transition occurs and returns the next
+// state function, or nil to stop the machine.
+type heartbeatStateFn func(ctx context.Context) heartbeatStateFn
+
 func (e *executorImpl[SP]) heartbeatloop(ctx context.Context) {
-	// Check if initial migration mode is LOCAL_PASSTHROUGH - if so, skip heartbeating entirely
 	if e.getMigrationMode() == types.MigrationModeLOCALPASSTHROUGH {
 		e.logger.Info("initial migration mode is local passthrough, skipping heartbeat loop")
 		return
 	}
 
+	for state := heartbeatStateFn(e.heartbeating); state != nil; {
+		state = state(ctx)
+	}
+}
+
+func (e *executorImpl[SP]) drainChannel() <-chan struct{} {
+	if e.drainObserver != nil {
+		return e.drainObserver.Drain()
+	}
+	return nil
+}
+
+// heartbeating sends periodic heartbeats and processes shard assignments.
+// Transitions: e.draining on drain, nil on stop/context cancellation.
+func (e *executorImpl[SP]) heartbeating(ctx context.Context) heartbeatStateFn {
+	drainCh := e.drainChannel()
+
 	heartBeatTimer := e.timeSource.NewTimer(backoff.JitDuration(e.heartBeatInterval, heartbeatJitterCoeff))
 	defer heartBeatTimer.Stop()
-
-	var drainCh <-chan struct{}
-	if e.drainObserver != nil {
-		drainCh = e.drainObserver.Drain()
-	}
 
 	for {
 		select {
@@ -220,30 +237,23 @@ func (e *executorImpl[SP]) heartbeatloop(ctx context.Context) {
 			e.logger.Info("shard distributor executor context done, stopping")
 			e.stopShardProcessors()
 			e.sendDrainingHeartbeat()
-			return
+			return nil
 		case <-e.stopC:
 			e.logger.Info("shard distributor executor stopped")
 			e.stopShardProcessors()
 			e.sendDrainingHeartbeat()
-			return
+			return nil
 		case <-drainCh:
 			e.logger.Info("drain signal received, stopping shard processors")
 			e.stopShardProcessors()
 			e.sendDrainingHeartbeat()
-
-			if !e.waitForUndrain(ctx) {
-				return
-			}
-
-			e.logger.Info("undrain signal received, resuming heartbeat")
-			drainCh = e.drainObserver.Drain()
-			heartBeatTimer.Reset(backoff.JitDuration(e.heartBeatInterval, heartbeatJitterCoeff))
+			return e.draining
 		case <-heartBeatTimer.Chan():
 			heartBeatTimer.Reset(backoff.JitDuration(e.heartBeatInterval, heartbeatJitterCoeff))
 			err := e.heartbeatAndUpdateAssignment(ctx)
 			if errors.Is(err, ErrLocalPassthroughMode) {
 				e.logger.Info("local passthrough mode: stopping heartbeat loop")
-				return
+				return nil
 			}
 			if err != nil {
 				e.logger.Error("failed to heartbeat and assign shards", tag.Error(err))
@@ -253,22 +263,25 @@ func (e *executorImpl[SP]) heartbeatloop(ctx context.Context) {
 	}
 }
 
-// waitForUndrain blocks until the undrain signal fires or the executor is stopped.
-// Returns true if undrained (caller should resume), false if stopped.
-func (e *executorImpl[SP]) waitForUndrain(ctx context.Context) bool {
+// draining waits for an undrain signal to resume heartbeating.
+// Transitions: e.heartbeating on undrain, nil on stop/context cancellation.
+func (e *executorImpl[SP]) draining(ctx context.Context) heartbeatStateFn {
+	e.logger.Info("entering draining state")
+
 	if e.drainObserver == nil {
-		return false
+		return nil
 	}
 
 	undrainCh := e.drainObserver.Undrain()
 
 	select {
 	case <-ctx.Done():
-		return false
+		return nil
 	case <-e.stopC:
-		return false
+		return nil
 	case <-undrainCh:
-		return true
+		e.logger.Info("undrain signal received, resuming heartbeat")
+		return e.heartbeating
 	}
 }
 
