@@ -91,7 +91,7 @@ func setupMocksForTaskListManager(t *testing.T, taskListID *Identifier, taskList
 	config := config.NewConfig(dynamicconfig.NewCollection(dynamicClient, logger), "hostname", commonConfig.RPC{}, getIsolationgroupsHelper)
 	mockHistoryService := history.NewMockClient(ctrl)
 	mockRegistry := NewMockManagerRegistry(ctrl)
-	mockRegistry.EXPECT().UnregisterManager(gomock.Any()).AnyTimes()
+	mockRegistry.EXPECT().Unregister(gomock.Any()).AnyTimes()
 	params := ManagerParams{
 		DomainCache:     deps.mockDomainCache,
 		Logger:          logger,
@@ -239,7 +239,7 @@ func createTestTaskListManagerWithConfig(t *testing.T, logger log.Logger, contro
 	mockMatchingClient.EXPECT().RefreshTaskListPartitionConfig(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 	mockHistoryService := history.NewMockClient(controller)
 	mockRegistry := NewMockManagerRegistry(controller)
-	mockRegistry.EXPECT().UnregisterManager(gomock.Any()).AnyTimes()
+	mockRegistry.EXPECT().Unregister(gomock.Any()).AnyTimes()
 	tl := "tl"
 	dID := "domain"
 	tlID, err := NewIdentifier(dID, tl, persistence.TaskListTypeActivity)
@@ -284,14 +284,14 @@ func TestTaskListManagerRegistryNotification(t *testing.T) {
 	// Replace the registry with our mock
 	tlm.registry = mockRegistry
 
-	// Expect UnregisterManager to be called exactly once with the manager instance
-	mockRegistry.EXPECT().UnregisterManager(tlm).Times(1)
+	// Expect Unregister to be called exactly once with the manager instance
+	mockRegistry.EXPECT().Unregister(tlm).Times(1)
 
 	// Start the manager
 	err := tlm.Start(context.Background())
 	require.NoError(t, err)
 
-	// Stop should call UnregisterManager
+	// Stop should call Unregister
 	tlm.Stop()
 	// Verify the manager stopped
 	require.Equal(t, int32(1), tlm.stopped)
@@ -450,6 +450,46 @@ func TestDescribeTaskList(t *testing.T) {
 			assert.Equal(t, tc.expectedStatus, result.TaskListStatus)
 			assert.Equal(t, tc.expectedConfig, result.PartitionConfig)
 			assert.ElementsMatch(t, expectedPollers, result.Pollers)
+		})
+	}
+}
+
+func TestQueriesPerSecond(t *testing.T) {
+	testCases := []struct {
+		name        string
+		mockSetup   func(ctrl *gomock.Controller, tlm *taskListManagerImpl)
+		expectedQPS float64
+	}{
+		{
+			name: "returns QPS from tracker",
+			mockSetup: func(ctrl *gomock.Controller, tlm *taskListManagerImpl) {
+				mockQPS := stats.NewMockQPSTrackerGroup(ctrl)
+				mockQPS.EXPECT().QPS().Return(float64(42.5))
+				tlm.qpsTracker = mockQPS
+			},
+			expectedQPS: 42.5,
+		},
+		{
+			name: "returns zero QPS",
+			mockSetup: func(ctrl *gomock.Controller, tlm *taskListManagerImpl) {
+				mockQPS := stats.NewMockQPSTrackerGroup(ctrl)
+				mockQPS.EXPECT().QPS().Return(float64(0))
+				tlm.qpsTracker = mockQPS
+			},
+			expectedQPS: 0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			logger := testlogger.New(t)
+			tlm := createTestTaskListManager(t, logger, ctrl)
+
+			tc.mockSetup(ctrl, tlm)
+
+			actualQPS := tlm.QueriesPerSecond()
+			assert.Equal(t, tc.expectedQPS, actualQPS)
 		})
 	}
 }
@@ -925,7 +965,7 @@ func TestTaskListManagerGetTaskBatch(t *testing.T) {
 	cfg.RangeSize = rangeSize
 	cfg.ReadRangeSize = dynamicproperties.GetIntPropertyFn(rangeSize / 2)
 	mockRegistry := NewMockManagerRegistry(controller)
-	mockRegistry.EXPECT().UnregisterManager(gomock.Any()).AnyTimes()
+	mockRegistry.EXPECT().Unregister(gomock.Any()).AnyTimes()
 	params := ManagerParams{
 		DomainCache:     mockDomainCache,
 		Logger:          logger,
@@ -1059,7 +1099,7 @@ func TestTaskListReaderPumpAdvancesAckLevelAfterEmptyReads(t *testing.T) {
 	cfg.ReadRangeSize = dynamicproperties.GetIntPropertyFn(rangeSize / 2)
 
 	mockRegistry := NewMockManagerRegistry(controller)
-	mockRegistry.EXPECT().UnregisterManager(gomock.Any()).AnyTimes()
+	mockRegistry.EXPECT().Unregister(gomock.Any()).AnyTimes()
 	params := ManagerParams{
 		DomainCache:     mockDomainCache,
 		Logger:          logger,
@@ -1209,7 +1249,7 @@ func TestTaskExpiryAndCompletion(t *testing.T) {
 			// on enqueuing a task to task buffer
 			cfg.IdleTasklistCheckInterval = dynamicproperties.GetDurationPropertyFnFilteredByTaskListInfo(20 * time.Millisecond)
 			mockRegistry := NewMockManagerRegistry(controller)
-			mockRegistry.EXPECT().UnregisterManager(gomock.Any()).AnyTimes()
+			mockRegistry.EXPECT().Unregister(gomock.Any()).AnyTimes()
 			params := ManagerParams{
 				DomainCache:     mockDomainCache,
 				Logger:          logger,

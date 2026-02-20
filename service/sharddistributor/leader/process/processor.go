@@ -49,6 +49,7 @@ const (
 	_defaultPeriod       = time.Second
 	_defaultHeartbeatTTL = 10 * time.Second
 	_defaultTimeout      = 1 * time.Second
+	_defaultCooldown     = 250 * time.Millisecond
 )
 
 type processorFactory struct {
@@ -60,18 +61,17 @@ type processorFactory struct {
 }
 
 type namespaceProcessor struct {
-	namespaceCfg        config.Namespace
-	logger              log.Logger
-	metricsClient       metrics.Client
-	timeSource          clock.TimeSource
-	running             bool
-	cancel              context.CancelFunc
-	sdConfig            *config.Config
-	cfg                 config.LeaderProcess
-	wg                  sync.WaitGroup
-	shardStore          store.Store
-	election            store.Election
-	lastAppliedRevision int64
+	namespaceCfg  config.Namespace
+	logger        log.Logger
+	metricsClient metrics.Client
+	timeSource    clock.TimeSource
+	running       bool
+	cancel        context.CancelFunc
+	sdConfig      *config.Config
+	cfg           config.LeaderProcess
+	wg            sync.WaitGroup
+	shardStore    store.Store
+	election      store.Election
 }
 
 // NewProcessorFactory creates a new processor factory
@@ -90,6 +90,9 @@ func NewProcessorFactory(
 	}
 	if cfg.Process.Timeout == 0 {
 		cfg.Process.Timeout = _defaultTimeout
+	}
+	if cfg.Process.RebalanceCooldown == 0 {
+		cfg.Process.RebalanceCooldown = _defaultCooldown
 	}
 
 	return &processorFactory{
@@ -180,6 +183,8 @@ func (p *namespaceProcessor) runProcess(ctx context.Context) {
 
 // runRebalancingLoop handles shard assignment and redistribution.
 func (p *namespaceProcessor) runRebalancingLoop(ctx context.Context) {
+	// Buffered channel to allow one pending rebalance trigger.
+	triggerChan := make(chan string, 1)
 
 	// Perform an initial rebalance on startup.
 	err := p.rebalanceShards(ctx)
@@ -187,22 +192,37 @@ func (p *namespaceProcessor) runRebalancingLoop(ctx context.Context) {
 		p.logger.Error("initial rebalance failed", tag.Error(err))
 	}
 
-	updateChan, err := p.runRebalanceTriggeringLoop(ctx)
-	if err != nil {
+	if err := p.runRebalanceTriggeringLoop(ctx, triggerChan); err != nil {
 		p.logger.Error("failed to start rebalance triggering loop", tag.Error(err))
 		return
 	}
 
+	nextRebalanceAllowedAt := p.timeSource.Now()
+
 	for {
 		select {
 		case <-ctx.Done():
-			p.logger.Info("Rebalancing loop cancelled.")
+			p.logger.Info("Rebalancing loop cancelled")
 			return
 
-		case update := <-updateChan:
-			p.logger.Info("Rebalancing triggered", tag.Dynamic("reason", update))
+		case triggerReason := <-triggerChan:
+			// If an update comes in before the cooldown has expired,
+			// we wait until the cooldown has passed since the last rebalance before processing it.
+			// This ensures that we don't rebalance too frequently in response to a flurry of updates
+			p.timeSource.Sleep(nextRebalanceAllowedAt.Sub(p.timeSource.Now()))
+			nextRebalanceAllowedAt = p.timeSource.Now().Add(p.cfg.RebalanceCooldown)
+
+			p.logger.Info("Rebalancing triggered", tag.Dynamic("triggerReason", triggerReason))
 			if err := p.rebalanceShards(ctx); err != nil {
 				p.logger.Error("rebalance failed", tag.Error(err))
+
+				// If rebalance fails, we want to trigger another rebalance ASAP,
+				// but with a cooldown to avoid rebalance storms if the underlying issue is persistent.
+				select {
+				case triggerChan <- "Previous rebalance failed":
+				default:
+					// If the channel is full, we skip sending the update to avoid blocking the loop.
+				}
 			}
 		}
 	}
@@ -210,23 +230,18 @@ func (p *namespaceProcessor) runRebalancingLoop(ctx context.Context) {
 
 // runRebalanceTriggeringLoop monitors for state changes and periodic triggers to initiate rebalancing.
 // it doesn't block Subscribe calls to avoid a growing backlog of updates.
-func (p *namespaceProcessor) runRebalanceTriggeringLoop(ctx context.Context) (<-chan string, error) {
-	// Buffered channel to allow one pending rebalance trigger.
-	triggerChan := make(chan string, 1)
-
-	updateChan, err := p.shardStore.Subscribe(ctx, p.namespaceCfg.Name)
+func (p *namespaceProcessor) runRebalanceTriggeringLoop(ctx context.Context, triggerChan chan<- string) error {
+	updateChan, err := p.shardStore.SubscribeToExecutorStatusChanges(ctx, p.namespaceCfg.Name)
 	if err != nil {
 		p.logger.Error("Failed to subscribe to state changes, stopping rebalancing loop.", tag.Error(err))
-		return nil, err
+		return err
 	}
 
 	go p.rebalanceTriggeringLoop(ctx, updateChan, triggerChan)
-	return triggerChan, nil
+	return nil
 }
 
 func (p *namespaceProcessor) rebalanceTriggeringLoop(ctx context.Context, updateChan <-chan int64, triggerChan chan<- string) {
-	defer close(triggerChan)
-
 	ticker := p.timeSource.NewTicker(p.cfg.Period)
 	defer ticker.Stop()
 
@@ -247,13 +262,10 @@ func (p *namespaceProcessor) rebalanceTriggeringLoop(ctx context.Context, update
 		case <-ticker.Chan():
 			tryTriggerRebalancing("Periodic reconciliation triggered")
 
-		case latestRevision, ok := <-updateChan:
+		case _, ok := <-updateChan:
 			if !ok {
 				p.logger.Info("Update channel closed, stopping rebalance triggering loop")
 				return
-			}
-			if latestRevision <= p.lastAppliedRevision {
-				continue
 			}
 
 			tryTriggerRebalancing("State change detected")
@@ -399,12 +411,6 @@ func (p *namespaceProcessor) rebalanceShardsImpl(ctx context.Context, metricsLoo
 	if err != nil {
 		return fmt.Errorf("get state: %w", err)
 	}
-
-	if namespaceState.GlobalRevision <= p.lastAppliedRevision {
-		p.logger.Info("No changes detected. Skipping rebalance.")
-		return nil
-	}
-	p.lastAppliedRevision = namespaceState.GlobalRevision
 
 	// Identify stale executors that need to be removed
 	staleExecutors := p.identifyStaleExecutors(namespaceState)

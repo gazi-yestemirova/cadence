@@ -318,7 +318,7 @@ func (c *taskListManagerImpl) Stop() {
 	}
 
 	// Notify parent registry to unregister this manager
-	c.registry.UnregisterManager(c)
+	c.registry.Unregister(c)
 
 	if c.adaptiveScaler != nil {
 		c.adaptiveScaler.Stop()
@@ -396,6 +396,10 @@ func (c *taskListManagerImpl) LoadBalancerHints() *types.LoadBalancerHints {
 		BacklogCount:  c.taskAckManager.GetBacklogCount(),
 		RatePerSecond: c.qpsTracker.QPS(),
 	}
+}
+
+func (c *taskListManagerImpl) QueriesPerSecond() float64 {
+	return c.qpsTracker.QPS()
 }
 
 func isTaskListPartitionConfigEqual(a types.TaskListPartitionConfig, b types.TaskListPartitionConfig) bool {

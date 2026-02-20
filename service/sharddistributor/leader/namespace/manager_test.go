@@ -279,7 +279,7 @@ func TestDrainSignal_TriggersResign(t *testing.T) {
 	err := manager.Start(context.Background())
 	require.NoError(t, err)
 
-	// Wait for elector to be running
+	// Wait for the elector to be running
 	leaderCh <- true
 	time.Sleep(10 * time.Millisecond)
 
@@ -287,7 +287,7 @@ func TestDrainSignal_TriggersResign(t *testing.T) {
 	observer.SignalDrain()
 	time.Sleep(50 * time.Millisecond)
 
-	// Handler should be in idle state
+	// Handler should be in an idle state
 	err = manager.Stop(context.Background())
 	assert.NoError(t, err)
 }
@@ -359,7 +359,7 @@ func TestDrainSignal_ManagerStopsBeforeDrain(t *testing.T) {
 }
 
 func TestDrainThenUndrain_ResumesElection(t *testing.T) {
-	logger := testlogger.New(t)
+	logger, logs := testlogger.NewObserved(t)
 	ctrl := gomock.NewController(t)
 	electionFactory := election.NewMockFactory(ctrl)
 
@@ -394,21 +394,25 @@ func TestDrainThenUndrain_ResumesElection(t *testing.T) {
 	err := manager.Start(context.Background())
 	require.NoError(t, err)
 
-	// Phase 1: elector1 running, become leader
+	// Phase 1: elector1 running, verify it becomes leader
 	leaderCh1 <- true
 	time.Sleep(10 * time.Millisecond)
+	assert.Equal(t, 1, logs.FilterMessage("Became leader for namespace").Len(), "expected leader elected in phase 1")
 
-	// Drain — elector1 resigns
+	// Drain - elector1 resigns
 	observer.SignalDrain()
 	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 1, logs.FilterMessage("Drain signal received, resigning from election").Len())
 
-	// Undrain — elector2 created, campaign again
+	// Undrain - elector2 created, campaign again
 	observer.SignalUndrain()
 	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 1, logs.FilterMessage("Undrain signal received, resuming election").Len())
 
-	// Phase 1 again: elector2 running, become leader
+	// Phase 2: verify elector2 is running and becomes leader after undrain
 	leaderCh2 <- true
 	time.Sleep(10 * time.Millisecond)
+	assert.Equal(t, 2, logs.FilterMessage("Became leader for namespace").Len(), "expected leader elected in both phases")
 
 	err = manager.Stop(context.Background())
 	assert.NoError(t, err)
