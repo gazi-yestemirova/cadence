@@ -200,7 +200,7 @@ func (e *executorImpl[SP]) removeShards(shardIDs []string) error {
 }
 
 // heartbeatStateFn is a recursive function type representing a state in the
-// executor heartbeat state machine (inspired by Rob Pike's lexer pattern).
+// executor heartbeat state machine.
 // Each state function blocks until a transition occurs and returns the next
 // state function, or nil to stop the machine.
 type heartbeatStateFn func(ctx context.Context) heartbeatStateFn
