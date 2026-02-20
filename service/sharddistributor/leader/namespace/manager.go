@@ -169,7 +169,6 @@ func (h *namespaceHandler) campaigning(ctx context.Context) stateFn {
 		h.logger.Error("Failed to create elector", tag.Error(err))
 		return nil
 	}
-
 	defer cancel()
 
 	for {
