@@ -199,6 +199,14 @@ func (e *executorImpl[SP]) removeShards(shardIDs []string) error {
 	return nil
 }
 
+// drainChannel returns the drain signal channel, or nil if no observer is configured.
+func (e *executorImpl[SP]) drainChannel() <-chan struct{} {
+	if e.drainObserver != nil {
+		return e.drainObserver.Drain()
+	}
+	return nil
+}
+
 func (e *executorImpl[SP]) heartbeatloop(ctx context.Context) {
 	// Check if initial migration mode is LOCAL_PASSTHROUGH - if so, skip heartbeating entirely
 	if e.getMigrationMode() == types.MigrationModeLOCALPASSTHROUGH {
@@ -209,10 +217,7 @@ func (e *executorImpl[SP]) heartbeatloop(ctx context.Context) {
 	heartBeatTimer := e.timeSource.NewTimer(backoff.JitDuration(e.heartBeatInterval, heartbeatJitterCoeff))
 	defer heartBeatTimer.Stop()
 
-	var drainCh <-chan struct{}
-	if e.drainObserver != nil {
-		drainCh = e.drainObserver.Drain()
-	}
+	drainCh := e.drainChannel()
 
 	for {
 		select {
