@@ -74,8 +74,8 @@ type Params[SP ShardProcessor] struct {
 	ShardProcessorFactory ShardProcessorFactory[SP]
 	Config                clientcommon.Config
 	TimeSource            clock.TimeSource
-	Metadata              ExecutorMetadata                  `optional:"true"`
-	DrainObserver         clientcommon.DrainSignalObserver   `optional:"true"`
+	Metadata              ExecutorMetadata                 `optional:"true"`
+	DrainObserver         clientcommon.DrainSignalObserver `optional:"true"`
 }
 
 // NewExecutorWithNamespace creates an executor for a specific namespace
