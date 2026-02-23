@@ -1295,6 +1295,81 @@ func TestHeartbeatLoop_DrainSignal(t *testing.T) {
 			},
 		},
 		{
+			name: "drain -> undrain -> drain -> context cancelled",
+			setup: func(
+				t *testing.T,
+				ctrl *gomock.Controller,
+				executor *executorImpl[*MockShardProcessor],
+				observer *closeDrainObserver,
+				mockTimeSource clock.MockedTimeSource,
+				mockClient *sharddistributorexecutor.MockClient,
+			) {
+				// Heartbeat sequence:
+				// 1. ACTIVE (initial heartbeat)
+				// 2. DRAINING (drain #1)
+				// 3. ACTIVE (after undrain #1)
+				// 4. DRAINING (drain #2)
+				// 5. DRAINING (context cancelled while waiting for undrain #2)
+				activeHB1 := mockClient.EXPECT().Heartbeat(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(&types.ExecutorHeartbeatResponse{
+						ShardAssignments: map[string]*types.ShardAssignment{},
+						MigrationMode:    types.MigrationModeONBOARDED,
+					}, nil)
+				drainingHB1 := mockClient.EXPECT().Heartbeat(gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, req *types.ExecutorHeartbeatRequest, _ ...yarpc.CallOption) (*types.ExecutorHeartbeatResponse, error) {
+						assert.Equal(t, types.ExecutorStatusDRAINING, req.Status)
+						return &types.ExecutorHeartbeatResponse{}, nil
+					}).After(activeHB1)
+				activeHB2 := mockClient.EXPECT().Heartbeat(gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, req *types.ExecutorHeartbeatRequest, _ ...yarpc.CallOption) (*types.ExecutorHeartbeatResponse, error) {
+						assert.Equal(t, types.ExecutorStatusACTIVE, req.Status)
+						return &types.ExecutorHeartbeatResponse{
+							ShardAssignments: map[string]*types.ShardAssignment{},
+							MigrationMode:    types.MigrationModeONBOARDED,
+						}, nil
+					}).After(drainingHB1)
+				mockClient.EXPECT().Heartbeat(gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, req *types.ExecutorHeartbeatRequest, _ ...yarpc.CallOption) (*types.ExecutorHeartbeatResponse, error) {
+						assert.Equal(t, types.ExecutorStatusDRAINING, req.Status)
+						return &types.ExecutorHeartbeatResponse{}, nil
+					}).After(activeHB2)
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
+				done := make(chan struct{})
+				go func() {
+					executor.heartbeatloop(ctx)
+					close(done)
+				}()
+
+				// Initial heartbeat
+				mockTimeSource.BlockUntil(1)
+				mockTimeSource.Advance(15 * time.Second)
+				time.Sleep(10 * time.Millisecond)
+
+				// Drain #1
+				observer.SignalDrain()
+				time.Sleep(50 * time.Millisecond)
+
+				// Undrain #1 - resumes heartbeating
+				observer.SignalUndrain()
+				time.Sleep(50 * time.Millisecond)
+
+				mockTimeSource.BlockUntil(1)
+				mockTimeSource.Advance(15 * time.Second)
+				time.Sleep(10 * time.Millisecond)
+
+				// Drain #2
+				observer.SignalDrain()
+				time.Sleep(50 * time.Millisecond)
+
+				// Cancel while waiting for undrain #2
+				cancel()
+				<-done
+			},
+		},
+		{
 			name: "drain then executor stops",
 			setup: func(
 				t *testing.T,
