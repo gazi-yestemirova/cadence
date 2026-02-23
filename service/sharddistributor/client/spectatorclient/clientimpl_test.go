@@ -273,7 +273,8 @@ func TestWatchLoopDisabled(t *testing.T) {
 		enabled:          func() bool { return false },
 	}
 
-	spectator.Start(context.Background())
+	err := spectator.Start(context.Background())
+	assert.NoError(t, err)
 
 	// Disabled state enters a sleep loop, verify it sleeps periodically
 	timeSource.BlockUntil(1)
@@ -286,6 +287,6 @@ func TestWatchLoopDisabled(t *testing.T) {
 	spectator.Stop()
 
 	// After Stop(), Done() has been called so Wait returns nil
-	err := stateSignal.Wait(context.Background())
+	err = stateSignal.Wait(context.Background())
 	assert.NoError(t, err)
 }
