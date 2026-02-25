@@ -616,7 +616,7 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 
 // commitGuardedOps commits the given operations in batches to stay within etcd's per-transaction operation limit.
 // Each batch creates a new guarded transaction. If any batch fails, the function returns immediately
-// with the error; already-committed batches are not rolled back. Callers must tolerate partial progress.
+// with the error
 func (s *executorStoreImpl) commitGuardedOps(ctx context.Context, ops []clientv3.Op, guard store.GuardFunc) error {
 	for i := 0; i < len(ops); i += maxOpsPerGuardTxn {
 		end := i + maxOpsPerGuardTxn
@@ -659,7 +659,10 @@ func (s *executorStoreImpl) DeleteExecutors(ctx context.Context, namespace strin
 		ops = append(ops, clientv3.OpDelete(executorIDPrefix, clientv3.WithPrefix()))
 	}
 
-	return s.commitGuardedOps(ctx, ops, guard)
+	if err := s.commitGuardedOps(ctx, ops, guard); err != nil {
+		return fmt.Errorf("delete executors: %w", err)
+	}
+	return nil
 }
 
 func (s *executorStoreImpl) DeleteAssignedStates(ctx context.Context, namespace string, executorIDs []string, guard store.GuardFunc) error {
@@ -673,7 +676,10 @@ func (s *executorStoreImpl) DeleteAssignedStates(ctx context.Context, namespace 
 		ops = append(ops, clientv3.OpDelete(executorIDPrefix, clientv3.WithPrefix()))
 	}
 
-	return s.commitGuardedOps(ctx, ops, guard)
+	if err := s.commitGuardedOps(ctx, ops, guard); err != nil {
+		return fmt.Errorf("delete assigned states: %w", err)
+	}
+	return nil
 }
 
 // DeleteShardStats deletes shard statistics for the given shard IDs.
@@ -760,7 +766,10 @@ func (s *executorStoreImpl) DeleteShardStats(ctx context.Context, namespace stri
 		ops = append(ops, clientv3.OpPut(statsKey, string(compressedPayload)))
 	}
 
-	return s.commitGuardedOps(ctx, ops, guard)
+	if err := s.commitGuardedOps(ctx, ops, guard); err != nil {
+		return fmt.Errorf("delete shard stats: %w", err)
+	}
+	return nil
 }
 
 func (s *executorStoreImpl) GetShardOwner(ctx context.Context, namespace, shardID string) (*store.ShardOwner, error) {
