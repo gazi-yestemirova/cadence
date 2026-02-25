@@ -17,6 +17,7 @@ import (
 
 	"github.com/uber/cadence/common/clock"
 	"github.com/uber/cadence/common/log/testlogger"
+	"github.com/uber/cadence/common/metrics"
 	"github.com/uber/cadence/common/types"
 	"github.com/uber/cadence/service/sharddistributor/config"
 	"github.com/uber/cadence/service/sharddistributor/store"
@@ -628,7 +629,11 @@ func TestAssignShardErrors(t *testing.T) {
 	// Case 1: Assigning an already-assigned shard.
 	err = executorStore.AssignShard(ctx, tc.Namespace, shardID1, activeExecutorID)
 	require.Error(t, err, "Should fail to assign an already-assigned shard")
-	assert.ErrorAs(t, err, new(*store.ErrShardAlreadyAssigned))
+	var alreadyAssigned *store.ErrShardAlreadyAssigned
+	require.ErrorAs(t, err, &alreadyAssigned)
+	assert.Equal(t, shardID1, alreadyAssigned.ShardID)
+	assert.Equal(t, activeExecutorID, alreadyAssigned.AssignedTo)
+	assert.NotNil(t, alreadyAssigned.Metadata)
 
 	// Case 2: Assigning to a non-existent executor.
 	err = executorStore.AssignShard(ctx, tc.Namespace, shardID2, "non-existent-executor")
@@ -953,11 +958,12 @@ func createStore(t *testing.T, tc *testhelper.StoreTestCluster) store.Store {
 	require.NoError(t, err)
 
 	store, err := NewStore(ExecutorStoreParams{
-		Client:     tc.Client,
-		ETCDConfig: etcdConfig,
-		Lifecycle:  fxtest.NewLifecycle(t),
-		Logger:     testlogger.New(t),
-		TimeSource: clock.NewMockedTimeSourceAt(time.Now()),
+		Client:        tc.Client,
+		ETCDConfig:    etcdConfig,
+		Lifecycle:     fxtest.NewLifecycle(t),
+		Logger:        testlogger.New(t),
+		TimeSource:    clock.NewMockedTimeSourceAt(time.Now()),
+		MetricsClient: metrics.NewNoopMetricsClient(),
 		Config: &config.Config{
 			LoadBalancingMode: func(namespace string) string { return config.LoadBalancingModeNAIVE },
 		},
