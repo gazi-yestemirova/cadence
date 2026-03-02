@@ -26,11 +26,8 @@ import (
 )
 
 const (
-	// etcd enforces a hard limit of 128 operations per transaction.
-	// The guard function uses 1 If comparison slot for the leadership check, leaving 127 for actual operations.
-	maxEtcdTxnOps     = 128
-	guardOpOverhead   = 1
-	maxOpsPerGuardTxn = maxEtcdTxnOps - guardOpOverhead
+	// guardOpOverhead is the number of transaction slots consumed by the leadership guard's If condition.
+	guardOpOverhead = 1
 )
 
 var (
@@ -633,8 +630,15 @@ func (s *executorStoreImpl) AssignShard(ctx context.Context, namespace, shardID,
 // Each batch creates a new guarded transaction. If any batch fails, the function returns immediately
 // with the error
 func (s *executorStoreImpl) commitGuardedOps(ctx context.Context, ops []clientv3.Op, guard store.GuardFunc) error {
-	for i := 0; i < len(ops); i += maxOpsPerGuardTxn {
-		end := i + maxOpsPerGuardTxn
+	if len(ops) == 0 {
+		return nil
+	}
+	maxOpsPerTxn := s.cfg.MaxEtcdTxnOps() - guardOpOverhead
+	numBatches := (len(ops) + maxOpsPerTxn - 1) / maxOpsPerTxn
+	batchSize := (len(ops) + numBatches - 1) / numBatches
+
+	for i := 0; i < len(ops); i += batchSize {
+		end := i + batchSize
 		if end > len(ops) {
 			end = len(ops)
 		}

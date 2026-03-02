@@ -16,6 +16,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/uber/cadence/common/clock"
+	"github.com/uber/cadence/common/dynamicconfig/dynamicproperties"
 	"github.com/uber/cadence/common/log/testlogger"
 	"github.com/uber/cadence/common/metrics"
 	"github.com/uber/cadence/common/types"
@@ -655,6 +656,7 @@ func TestShardStatisticsPersistence(t *testing.T) {
 		LoadBalancingMode: func(namespace string) string {
 			return config.LoadBalancingModeGREEDY
 		},
+		MaxEtcdTxnOps: dynamicproperties.GetIntPropertyFn(128),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -786,6 +788,9 @@ func (t *trackingTxn) Commit() (*clientv3.TxnResponse, error) {
 }
 
 func TestCommitGuardedOps_Batching(t *testing.T) {
+	const testMaxTxnOps = 128
+	const testMaxOpsPerBatch = testMaxTxnOps - guardOpOverhead
+
 	tests := []struct {
 		name            string
 		numOps          int
@@ -808,22 +813,22 @@ func TestCommitGuardedOps_Batching(t *testing.T) {
 		},
 		{
 			name:            "ExactlyAtLimit",
-			numOps:          maxOpsPerGuardTxn,
+			numOps:          testMaxOpsPerBatch,
 			expectedBatches: 1,
 		},
 		{
 			name:            "OneOverLimit",
-			numOps:          maxOpsPerGuardTxn + 1,
+			numOps:          testMaxOpsPerBatch + 1,
 			expectedBatches: 2,
 		},
 		{
 			name:            "ExactlyTwoBatches",
-			numOps:          maxOpsPerGuardTxn * 2,
+			numOps:          testMaxOpsPerBatch * 2,
 			expectedBatches: 2,
 		},
 		{
 			name:            "MultipleBatches",
-			numOps:          maxOpsPerGuardTxn*3 + 10,
+			numOps:          testMaxOpsPerBatch*3 + 10,
 			expectedBatches: 4,
 		},
 	}
@@ -850,7 +855,10 @@ func TestCommitGuardedOps_Batching(t *testing.T) {
 				mockClient.EXPECT().Txn(gomock.Any()).Return(txn)
 			}
 
-			s := &executorStoreImpl{client: mockClient}
+			s := &executorStoreImpl{
+				client: mockClient,
+				cfg:    &config.Config{MaxEtcdTxnOps: dynamicproperties.GetIntPropertyFn(testMaxTxnOps)},
+			}
 			err := s.commitGuardedOps(context.Background(), ops, store.NopGuard())
 			require.NoError(t, err)
 
@@ -858,7 +866,7 @@ func TestCommitGuardedOps_Batching(t *testing.T) {
 
 			totalOps := 0
 			for _, size := range batchSizes {
-				assert.LessOrEqual(t, size, maxOpsPerGuardTxn)
+				assert.LessOrEqual(t, size, testMaxOpsPerBatch)
 				totalOps += size
 			}
 			assert.Equal(t, tt.numOps, totalOps)
@@ -883,14 +891,19 @@ func TestCommitGuardedOps_CommitError_StopsEarly(t *testing.T) {
 		}
 	}
 
-	ops := make([]clientv3.Op, maxOpsPerGuardTxn+10)
+	// Use a small limit so we get multiple batches with fewer ops
+	const testMaxTxnOps = 10
+	ops := make([]clientv3.Op, testMaxTxnOps+5)
 	for i := range ops {
 		ops[i] = clientv3.OpDelete(fmt.Sprintf("/test/key/%d", i))
 	}
 
 	mockClient.EXPECT().Txn(gomock.Any()).Return(makeTxn(fmt.Errorf("etcd unavailable")))
 
-	s := &executorStoreImpl{client: mockClient}
+	s := &executorStoreImpl{
+		client: mockClient,
+		cfg:    &config.Config{MaxEtcdTxnOps: dynamicproperties.GetIntPropertyFn(testMaxTxnOps)},
+	}
 	err := s.commitGuardedOps(context.Background(), ops, store.NopGuard())
 
 	require.Error(t, err)
@@ -912,14 +925,18 @@ func TestCommitGuardedOps_LeadershipLost_StopsEarly(t *testing.T) {
 		}
 	}
 
-	ops := make([]clientv3.Op, maxOpsPerGuardTxn+10)
+	const testMaxTxnOps = 10
+	ops := make([]clientv3.Op, testMaxTxnOps+5)
 	for i := range ops {
 		ops[i] = clientv3.OpDelete(fmt.Sprintf("/test/key/%d", i))
 	}
 
 	mockClient.EXPECT().Txn(gomock.Any()).Return(makeTxn(false))
 
-	s := &executorStoreImpl{client: mockClient}
+	s := &executorStoreImpl{
+		client: mockClient,
+		cfg:    &config.Config{MaxEtcdTxnOps: dynamicproperties.GetIntPropertyFn(testMaxTxnOps)},
+	}
 	err := s.commitGuardedOps(context.Background(), ops, store.NopGuard())
 
 	require.Error(t, err)
@@ -944,7 +961,10 @@ func TestCommitGuardedOps_GuardError(t *testing.T) {
 	}
 
 	ops := []clientv3.Op{clientv3.OpDelete("/test/key")}
-	s := &executorStoreImpl{client: mockClient}
+	s := &executorStoreImpl{
+		client: mockClient,
+		cfg:    &config.Config{MaxEtcdTxnOps: dynamicproperties.GetIntPropertyFn(128)},
+	}
 	err := s.commitGuardedOps(context.Background(), ops, failingGuard)
 
 	require.Error(t, err)
@@ -966,6 +986,7 @@ func createStore(t *testing.T, tc *testhelper.StoreTestCluster) store.Store {
 		MetricsClient: metrics.NewNoopMetricsClient(),
 		Config: &config.Config{
 			LoadBalancingMode: func(namespace string) string { return config.LoadBalancingModeNAIVE },
+			MaxEtcdTxnOps:     dynamicproperties.GetIntPropertyFn(128),
 		},
 	})
 	require.NoError(t, err)
