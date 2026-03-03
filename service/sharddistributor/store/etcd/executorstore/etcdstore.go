@@ -634,6 +634,10 @@ func (s *executorStoreImpl) commitGuardedOps(ctx context.Context, ops []clientv3
 		return nil
 	}
 	maxOpsPerTxn := s.cfg.MaxEtcdTxnOps() - guardOpOverhead
+	if maxOpsPerTxn < 1 {
+		maxOpsPerTxn = 1
+	}
+
 	numBatches := (len(ops) + maxOpsPerTxn - 1) / maxOpsPerTxn
 	batchSize := (len(ops) + numBatches - 1) / numBatches
 
