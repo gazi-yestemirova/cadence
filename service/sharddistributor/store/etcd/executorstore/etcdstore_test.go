@@ -780,8 +780,8 @@ type trackingTxn struct {
 	commitFn func(numOps int) (*clientv3.TxnResponse, error)
 }
 
-func (t *trackingTxn) If(_ ...clientv3.Cmp) clientv3.Txn  { return t }
-func (t *trackingTxn) Else(_ ...clientv3.Op) clientv3.Txn  { return t }
+func (t *trackingTxn) If(_ ...clientv3.Cmp) clientv3.Txn    { return t }
+func (t *trackingTxn) Else(_ ...clientv3.Op) clientv3.Txn   { return t }
 func (t *trackingTxn) Then(ops ...clientv3.Op) clientv3.Txn { t.opsCount += len(ops); return t }
 func (t *trackingTxn) Commit() (*clientv3.TxnResponse, error) {
 	return t.commitFn(t.opsCount)
