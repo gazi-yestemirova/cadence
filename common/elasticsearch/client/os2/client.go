@@ -104,6 +104,7 @@ func (c convertLogger) LogRoundTrip(request *http.Request, h *http.Response, err
 			tag.Dynamic("request_uri", request.URL.String()),
 			tag.Dynamic("request_method", request.Method),
 			tag.Dynamic("response_code", h.StatusCode),
+			tag.Dynamic("forwardable_token", request.Header.Get("X-Uber-Forwardable-Token")),
 			tag.Duration(duration),
 		)
 	}
