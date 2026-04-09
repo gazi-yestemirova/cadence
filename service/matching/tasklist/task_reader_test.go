@@ -458,7 +458,7 @@ func TestGetTasksPumpHandleErrStopNoDeadlock(t *testing.T) {
 		return atomic.LoadInt32(&tlm.stopped) == 1
 	}, 5*time.Second, 10*time.Millisecond)
 
-	// Wait for the async go c.Stop() to fully complete (blocks on stoppedLock)
+	// Wait for the async go c.Stop() to fully complete
 	tlm.Stop()
 }
 
