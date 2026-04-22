@@ -1517,6 +1517,8 @@ const (
 	AsyncWorkflowConsumerScope
 	// DiagnosticsWorkflowScope is scope used by diagnostics workflow
 	DiagnosticsWorkflowScope
+	// SchedulerWorkerScope is scope used by the scheduler worker manager
+	SchedulerWorkerScope
 	// SchedulerActivityScope is scope used by the scheduler fire activity
 	SchedulerActivityScope
 
@@ -2248,6 +2250,7 @@ var ScopeDefs = map[ServiceIdx]map[ScopeIdx]scopeDefinition{
 		ESAnalyzerScope:                        {operation: "ESAnalyzer"},
 		AsyncWorkflowConsumerScope:             {operation: "AsyncWorkflowConsumer"},
 		DiagnosticsWorkflowScope:               {operation: "DiagnosticsWorkflow"},
+		SchedulerWorkerScope:                   {operation: "SchedulerWorker"},
 		SchedulerActivityScope:                 {operation: "SchedulerActivity"},
 	},
 	ShardDistributor: {
@@ -3117,6 +3120,22 @@ const (
 	DiagnosticsWorkflowSuccess
 	DiagnosticsWorkflowExecutionLatency
 
+	// Scheduler worker metrics
+	// SchedulerWorkerActiveGauge is the number of per-domain workers running on this host (host-level)
+	SchedulerWorkerActiveGauge
+	// SchedulerWorkerStartedCount counts domain workers started on this host (host-level)
+	SchedulerWorkerStartedCount
+	// SchedulerWorkerStoppedCount counts domain workers stopped on this host (host-level)
+	SchedulerWorkerStoppedCount
+	// SchedulerWorkerStartErrorsCountPerDomain counts worker start failures; domain-tagged to surface per-domain recurring failures
+	SchedulerWorkerStartErrorsCountPerDomain
+	// SchedulerWorkerRefreshLatencyHistogram measures end-to-end duration of one refreshWorkers() call (host-level)
+	SchedulerWorkerRefreshLatencyHistogram
+	// SchedulerWorkerLookupFailuresCount counts LookupN failures during refresh; ownership decision skipped (host-level)
+	SchedulerWorkerLookupFailuresCount
+	// SchedulerWorkerDomainCoverageCount is incremented every refresh cycle for each domain with an active worker on this host;
+	// rate dropping to zero for a domain means no host is covering it (per-domain)
+	SchedulerWorkerDomainCoverageCount
 	// Scheduler activity metrics
 	// SchedulerFireStartedCountPerDomain measures successfully started target workflows; use trigger_source to differentiate schedule vs backfill rates.
 	SchedulerFireStartedCountPerDomain
@@ -4025,6 +4044,13 @@ var MetricDefs = map[ServiceIdx]map[MetricIdx]metricDefinition{
 		DiagnosticsWorkflowStartedCount:               {metricName: "diagnostics_workflow_count", metricType: Counter},
 		DiagnosticsWorkflowSuccess:                    {metricName: "diagnostics_workflow_success", metricType: Counter},
 		DiagnosticsWorkflowExecutionLatency:           {metricName: "diagnostics_workflow_execution_latency", metricType: Timer},
+		SchedulerWorkerActiveGauge:                    {metricName: "scheduler_worker_active_gauge", metricType: Gauge},
+		SchedulerWorkerStartedCount:                   {metricName: "scheduler_worker_started_count", metricType: Counter},
+		SchedulerWorkerStoppedCount:                   {metricName: "scheduler_worker_stopped_count", metricType: Counter},
+		SchedulerWorkerStartErrorsCountPerDomain:      {metricName: "scheduler_worker_start_errors_count_per_domain", metricType: Counter},
+		SchedulerWorkerRefreshLatencyHistogram:        {metricName: "scheduler_worker_refresh_latency_ns", metricType: Histogram, exponentialBuckets: Default1ms100s},
+		SchedulerWorkerLookupFailuresCount:            {metricName: "scheduler_worker_lookup_failures_count", metricType: Counter},
+		SchedulerWorkerDomainCoverageCount:            {metricName: "scheduler_worker_domain_coverage_count", metricType: Counter},
 		SchedulerFireStartedCountPerDomain:            {metricName: "scheduler_fire_started_per_domain", metricType: Counter},
 		SchedulerFireSkippedCountPerDomain:            {metricName: "scheduler_fire_skipped_per_domain", metricType: Counter},
 		SchedulerFireBufferedCountPerDomain:           {metricName: "scheduler_fire_buffered_per_domain", metricType: Counter},

@@ -179,6 +179,13 @@ func (m *WorkerManager) run() {
 // refreshWorkers scans all domains and reconciles the set of active workers
 // with the domains this host owns via the membership hashring.
 func (m *WorkerManager) refreshWorkers() {
+	scope := m.metricsClient.Scope(metrics.SchedulerWorkerScope)
+	startTime := time.Now()
+	defer func() {
+		scope.ExponentialHistogram(metrics.SchedulerWorkerRefreshLatencyHistogram, time.Since(startTime))
+		scope.UpdateGauge(metrics.SchedulerWorkerActiveGauge, float64(len(m.activeWorkers)))
+	}()
+
 	domains := m.domainCache.GetAllDomain()
 	ownedDomains := make(map[string]struct{}, len(domains))
 	lookupFailed := make(map[string]struct{})
@@ -202,6 +209,7 @@ func (m *WorkerManager) refreshWorkers() {
 				tag.WorkflowDomainName(domainName),
 				tag.Error(err),
 			)
+			scope.IncCounter(metrics.SchedulerWorkerLookupFailuresCount)
 			lookupFailed[domainName] = struct{}{}
 			continue
 		}
@@ -220,11 +228,12 @@ func (m *WorkerManager) refreshWorkers() {
 			continue
 		}
 
-		m.startWorkerForDomain(domainName)
+		m.startWorkerForDomain(scope, domainName)
 	}
 
 	for domainName, w := range m.activeWorkers {
 		if _, owned := ownedDomains[domainName]; owned {
+			scope.Tagged(metrics.DomainTag(domainName)).IncCounter(metrics.SchedulerWorkerDomainCoverageCount)
 			continue
 		}
 		// Keep workers running for domains where lookup failed to avoid
@@ -236,6 +245,7 @@ func (m *WorkerManager) refreshWorkers() {
 			tag.WorkflowDomainName(domainName),
 		)
 		w.Stop()
+		scope.IncCounter(metrics.SchedulerWorkerStoppedCount)
 		delete(m.activeWorkers, domainName)
 	}
 
@@ -244,17 +254,19 @@ func (m *WorkerManager) refreshWorkers() {
 	)
 }
 
-func (m *WorkerManager) startWorkerForDomain(domainName string) {
+func (m *WorkerManager) startWorkerForDomain(scope metrics.Scope, domainName string) {
 	w, err := m.createWorker(domainName)
 	if err != nil {
 		m.logger.Error("failed to start scheduler worker for domain",
 			tag.WorkflowDomainName(domainName),
 			tag.Error(err),
 		)
+		scope.Tagged(metrics.DomainTag(domainName)).IncCounter(metrics.SchedulerWorkerStartErrorsCountPerDomain)
 		return
 	}
 
 	m.activeWorkers[domainName] = w
+	scope.IncCounter(metrics.SchedulerWorkerStartedCount)
 	m.logger.Info("started scheduler worker for domain",
 		tag.WorkflowDomainName(domainName),
 	)
