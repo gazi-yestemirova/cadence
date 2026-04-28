@@ -38,6 +38,31 @@ const (
 
 	QueryTypeDescribe = "scheduler-describe"
 
+	// Metric name strings emitted via tally.Scope (workflow.GetMetricsScope).
+	SchedulerSignalReceivedCountPerDomain = "scheduler_signal_received_count_per_domain"
+	SchedulerMissedFiredCountPerDomain    = "scheduler_missed_fired_count_per_domain"
+	SchedulerMissedSkippedCountPerDomain  = "scheduler_missed_skipped_count_per_domain"
+	SchedulerBackfillFiredCountPerDomain  = "scheduler_backfill_fired_count_per_domain"
+	SchedulerContinueAsNewCountPerDomain  = "scheduler_continue_as_new_count_per_domain"
+
+	// Tag key strings for scheduler workflow metrics.
+	SignalTypeTag    = "signal_type"
+	CatchUpPolicyTag = "catch_up_policy"
+	ReasonTag        = "reason"
+
+	// ContinueAsNew reason tag values for scheduler_continue_as_new_count metric.
+	ContinueAsNewReasonMissedRun    = "missed_run"
+	ContinueAsNewReasonBackfill     = "back_fill"
+	ContinueAsNewReasonSignal       = "signal"
+	ContinueAsNewReasonIterationCap = "iteration_cap"
+
+	// signal_type tag values for scheduler_signal_received_count metric.
+	signalTypeTagPause    = "pause"
+	signalTypeTagUnpause  = "unpause"
+	signalTypeTagUpdate   = "update"
+	signalTypeTagBackfill = "backfill"
+	signalTypeTagDelete   = "delete"
+
 	// Search attribute keys set on target workflows started by the scheduler.
 	SearchAttrScheduleID   = "CadenceScheduleID"
 	SearchAttrScheduleTime = "CadenceScheduleTime"
