@@ -62,6 +62,8 @@ type (
 		GetClusterMetadata() cluster.Metadata
 		GetConfig() *config.Config
 		GetEventsCache() events.Cache
+		// GetLogger returns a logger tagged with this shard (history item includes shard-id).
+		// Prefer it for work scoped to a shard so logs remain attributable when downstream adds tags.
 		GetLogger() log.Logger
 		GetThrottledLogger() log.Logger
 		GetMetricsClient() metrics.Client
