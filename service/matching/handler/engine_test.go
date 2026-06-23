@@ -953,18 +953,26 @@ func TestGetTasklistsNotOwned(t *testing.T) {
 	resolver.EXPECT().Lookup(service.Matching, tl2.GetName()).Return(membership.NewDetailedHostInfo("", "host456", nil), nil)
 	resolver.EXPECT().Lookup(service.Matching, tl3.GetName()).Return(membership.NewDetailedHostInfo("", "host123", nil), nil)
 
+	// Keep all task lists excluded from the shard-distributor (onboarding percentage 0)
+	// so this test exercises the hash-ring ownership path it is asserting on.
+	pct := membership.NewMockPercentageOnboarded(ctrl)
+	pct.EXPECT().Value().Return(0).AnyTimes()
+
 	e := matchingEngineImpl{
-		shutdown:           make(chan struct{}),
-		membershipResolver: resolver,
-		taskListRegistry:   tasklist.NewTaskListRegistry(metrics.NewNoopMetricsClient()),
-		config:             &config.Config{},
-		logger:             log.NewNoop(),
+		shutdown:            make(chan struct{}),
+		membershipResolver:  resolver,
+		taskListRegistry:    tasklist.NewTaskListRegistry(metrics.NewNoopMetricsClient()),
+		percentageOnboarded: pct,
+		config: &config.Config{
+			ExcludeShortLivedTaskListsFromShardManager: func(opts ...dynamicproperties.FilterOption) bool { return true },
+		},
+		logger: log.NewNoop(),
 	}
 	e.taskListRegistry.Register(*tl1, tl1m)
 	e.taskListRegistry.Register(*tl2, tl2m)
 	e.taskListRegistry.Register(*tl3, tl3m)
 
-	tls, err := e.getNonOwnedTasklistsLocked()
+	tls, err := e.getNonOwnedTasklists()
 	assert.NoError(t, err)
 
 	assert.Equal(t, []tasklist.Manager{tl2m}, tls)
@@ -989,13 +997,21 @@ func TestShutDownTasklistsNotOwned(t *testing.T) {
 	resolver.EXPECT().Lookup(service.Matching, tl2.GetName()).Return(membership.NewDetailedHostInfo("", "host456", nil), nil)
 	resolver.EXPECT().Lookup(service.Matching, tl3.GetName()).Return(membership.NewDetailedHostInfo("", "host123", nil), nil)
 
+	// Keep all task lists excluded from the shard-distributor (onboarding percentage 0)
+	// so this test exercises the hash-ring ownership path it is asserting on.
+	pct := membership.NewMockPercentageOnboarded(ctrl)
+	pct.EXPECT().Value().Return(0).AnyTimes()
+
 	e := matchingEngineImpl{
-		shutdown:           make(chan struct{}),
-		membershipResolver: resolver,
-		taskListRegistry:   tasklist.NewTaskListRegistry(metrics.NewNoopMetricsClient()),
-		config:             &config.Config{},
-		metricsClient:      metrics.NewNoopMetricsClient(),
-		logger:             log.NewNoop(),
+		shutdown:            make(chan struct{}),
+		membershipResolver:  resolver,
+		taskListRegistry:    tasklist.NewTaskListRegistry(metrics.NewNoopMetricsClient()),
+		percentageOnboarded: pct,
+		config: &config.Config{
+			ExcludeShortLivedTaskListsFromShardManager: func(opts ...dynamicproperties.FilterOption) bool { return true },
+		},
+		metricsClient: metrics.NewNoopMetricsClient(),
+		logger:        log.NewNoop(),
 	}
 	e.taskListRegistry.Register(*tl1, tl1m)
 	e.taskListRegistry.Register(*tl2, tl2m)
@@ -1015,6 +1031,84 @@ func TestShutDownTasklistsNotOwned(t *testing.T) {
 	wg.Wait()
 
 	assert.NoError(t, err)
+}
+
+// TestGetNonOwnedTasklists_ShardDistributorAware verifies the preemptive-unload optimization
+// (the membership-change loop) under the shard-distributor:
+//   - Task lists onboarded to the shard-distributor are left entirely to SD: they are never
+//     unloaded by this loop and the executor is never consulted, so a hash-ring change cannot
+//     preempt an SD-owned task list (the core of the fix).
+//   - Task lists excluded from the shard-distributor still use the hash-ring: those the ring
+//     no longer assigns to this host are unloaded, the rest are kept, and a transient lookup
+//     error is treated conservatively (kept).
+//
+// To make exclusion deterministic regardless of name hashing, the onboarding percentage is
+// 100 (so every non-UUID name is below the percentage -> onboarded) and short-lived exclusion
+// is on (so UUID names are excluded -> hash-ring). UUID names therefore exercise the hash-ring
+// path and non-UUID names exercise the SD path.
+func TestGetNonOwnedTasklists_ShardDistributorAware(t *testing.T) {
+	const (
+		self  = "host-self"
+		other = "host-other"
+
+		// UUID names -> excluded from the shard-distributor -> hash-ring ownership.
+		excludedOwnedName    = "11111111-1111-1111-1111-111111111111"
+		excludedNotOwnedName = "22222222-2222-2222-2222-222222222222"
+		excludedErrName      = "33333333-3333-3333-3333-333333333333"
+		// Non-UUID name -> onboarded to the shard-distributor.
+		onboardedName = "onboarded-tasklist"
+	)
+
+	ctrl := gomock.NewController(t)
+	resolver := membership.NewMockResolver(ctrl)
+	resolver.EXPECT().WhoAmI().Return(membership.NewDetailedHostInfo(self, self, nil), nil)
+
+	pct := membership.NewMockPercentageOnboarded(ctrl)
+	pct.EXPECT().Value().Return(100).AnyTimes()
+
+	excludedOwned := mustNewIdentifier(t, "", excludedOwnedName, 0)
+	excludedNotOwned := mustNewIdentifier(t, "", excludedNotOwnedName, 0)
+	excludedErr := mustNewIdentifier(t, "", excludedErrName, 0)
+	onboarded := mustNewIdentifier(t, "", onboardedName, 0)
+
+	excludedOwnedM := newMockManagerWithTaskListID(ctrl, excludedOwned)
+	excludedNotOwnedM := newMockManagerWithTaskListID(ctrl, excludedNotOwned)
+	excludedErrM := newMockManagerWithTaskListID(ctrl, excludedErr)
+	onboardedM := newMockManagerWithTaskListID(ctrl, onboarded)
+
+	// Hash-ring lookups happen only for the excluded (UUID) task lists. The onboarded task
+	// list must never reach the resolver — if it did, gomock would fail on an unexpected call.
+	resolver.EXPECT().Lookup(service.Matching, excludedOwnedName).Return(membership.NewDetailedHostInfo(self, self, nil), nil)
+	resolver.EXPECT().Lookup(service.Matching, excludedNotOwnedName).Return(membership.NewDetailedHostInfo(other, other, nil), nil)
+	resolver.EXPECT().Lookup(service.Matching, excludedErrName).Return(membership.HostInfo{}, errors.New("ring lookup failed"))
+
+	// The executor must never be consulted: onboarded task lists are skipped entirely, and
+	// excluded ones use the hash-ring. A strict (no-expectation) mock fails on any call.
+	mockExec := executorclient.NewMockExecutor[tasklist.ShardProcessor](ctrl)
+
+	e := matchingEngineImpl{
+		shutdown:            make(chan struct{}),
+		membershipResolver:  resolver,
+		taskListRegistry:    tasklist.NewTaskListRegistry(metrics.NewNoopMetricsClient()),
+		percentageOnboarded: pct,
+		executor:            mockExec,
+		config: &config.Config{
+			ExcludeShortLivedTaskListsFromShardManager: func(opts ...dynamicproperties.FilterOption) bool { return true },
+		},
+		logger: log.NewNoop(),
+	}
+	e.taskListRegistry.Register(*excludedOwned, excludedOwnedM)
+	e.taskListRegistry.Register(*excludedNotOwned, excludedNotOwnedM)
+	e.taskListRegistry.Register(*excludedErr, excludedErrM)
+	e.taskListRegistry.Register(*onboarded, onboardedM)
+
+	tls, err := e.getNonOwnedTasklists()
+	assert.NoError(t, err)
+
+	// Only the excluded task list the hash-ring assigns to another host is unloaded. The
+	// onboarded task list (left to SD), the self-owned excluded one, and the one whose ring
+	// lookup errored must all be left alone.
+	assert.Equal(t, []tasklist.Manager{excludedNotOwnedM}, tls)
 }
 
 func TestUpdateTaskListPartitionConfig(t *testing.T) {

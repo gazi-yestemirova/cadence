@@ -76,7 +76,7 @@ func (e *matchingEngineImpl) runMembershipChangeLoop() {
 }
 
 func (e *matchingEngineImpl) shutDownNonOwnedTasklists() error {
-	noLongerOwned, err := e.getNonOwnedTasklistsLocked()
+	noLongerOwned, err := e.getNonOwnedTasklists()
 	if err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func (e *matchingEngineImpl) shutDownNonOwnedTasklists() error {
 	return nil
 }
 
-func (e *matchingEngineImpl) getNonOwnedTasklistsLocked() ([]tasklist.Manager, error) {
+func (e *matchingEngineImpl) getNonOwnedTasklists() ([]tasklist.Manager, error) {
 	var toShutDown []tasklist.Manager
 
 	taskLists := e.taskListRegistry.AllManagers()
@@ -124,9 +124,30 @@ func (e *matchingEngineImpl) getNonOwnedTasklistsLocked() ([]tasklist.Manager, e
 	}
 
 	for _, tl := range taskLists {
-		taskListOwner, err := e.membershipResolver.Lookup(service.Matching, tl.TaskListID().GetName())
+		taskListName := tl.TaskListID().GetName()
+
+		// Task lists onboarded to the shard-distributor have their ownership and teardown
+		// driven entirely by the SD assignment flow (heartbeat -> updateShardAssignment ->
+		// ShardProcessor.Stop). The hash-ring is not their source of truth, so this
+		// hash-ring-triggered optimization must leave them to SD: acting on a stale ring
+		// view here would fight SD and cause the exact unload/reload thrash it tries to avoid.
+		if !e.isExcludedFromShardDistributor(taskListName) {
+			continue
+		}
+
+		// Excluded task lists (short-lived UUID lists, or those above the onboarding
+		// percentage) rely on the hash-ring; unload the ones it no longer assigns here.
+		taskListOwner, err := e.membershipResolver.Lookup(service.Matching, taskListName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to lookup task list owner: %w", err)
+			// Be conservative: on a lookup error do NOT unload the task list. Unloading on
+			// a transient error would recreate the exact thrash this optimization avoids.
+			e.logger.Warn("skipping preemptive unload decision due to ownership lookup error",
+				tag.WorkflowTaskListType(tl.TaskListID().GetType()),
+				tag.WorkflowTaskListName(taskListName),
+				tag.WorkflowDomainID(tl.TaskListID().GetDomainID()),
+				tag.Error(err),
+			)
+			continue
 		}
 
 		if taskListOwner.Identity() != self.Identity() {
