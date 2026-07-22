@@ -105,6 +105,34 @@ func TestTaskListExcludedFromShardDistributor(t *testing.T) {
 			percentageOnboarded:        60,
 			excludeShortLivedTaskLists: true,
 		},
+		{
+			name:                       "BITS task list with truncated UUID - exclude enabled",
+			taskListName:               "testss/cdnc-bits/58a3fcd1-678f-4a0a-b0ad-c91a020",
+			want:                       true,
+			percentageOnboarded:        100,
+			excludeShortLivedTaskLists: true,
+		},
+		{
+			name:                       "BITS task list with truncated UUID - exclude disabled",
+			taskListName:               "testss/cdnc-bits/58a3fcd1-678f-4a0a-b0ad-c91a020",
+			want:                       false,
+			percentageOnboarded:        100,
+			excludeShortLivedTaskLists: false,
+		},
+		{
+			name:                       "BITS task list with full UUID - exclude enabled",
+			taskListName:               "tl/cdnc-bits/u/integration:bits-pipeline/31012248-c298-4245-833e-ab439eeaf17b",
+			want:                       true,
+			percentageOnboarded:        100,
+			excludeShortLivedTaskLists: true,
+		},
+		{
+			name:                       "BITS marker present but exclude disabled falls back to percentage",
+			taskListName:               "testss/cdnc-bits/58a3fcd1-678f-4a0a-b0ad-c91a020",
+			want:                       true,
+			percentageOnboarded:        0,
+			excludeShortLivedTaskLists: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
